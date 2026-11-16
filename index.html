@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!--
+      Security: this page may only talk to itself, OpenAI, and an Ollama server on this computer.
+      That means an OpenAI key typed here can only ever be sent to api.openai.com.
+      (ws:/localhost entries are for the Vite dev server's hot reload.)
+    -->
+    <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self';
+      script-src 'self';
+      style-src 'self' 'unsafe-inline';
+      img-src 'self' data: blob:;
+      font-src 'self';
+      connect-src 'self' https://api.openai.com http://localhost:* http://127.0.0.1:* ws://localhost:*;
+      object-src 'none';
+      base-uri 'self';
+      form-action 'none';
+    " />
+    <meta name="referrer" content="no-referrer" />
+
+    <title>BodiedGPT — What does an AI do if it's given a body and freedom?</title>
+    <meta name="description" content="BodiedGPT is an open experiment: an AI (GPT or a local Ollama model) gets a body on a 3D island and complete freedom. Watch what it thinks, wants and does, alone or with another AI, and read exactly what it was told." />
+    <meta name="keywords" content="AI experiment, embodied AI, LLM agent, GPT body, Ollama, OpenAI, AI simulation, three.js, AI behaviour, AI free will" />
+    <meta name="author" content="BodiedGPT" />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#1c1c1e" />
+    <meta name="color-scheme" content="dark" />
+    <!-- Replace https://bodiedgpt.example with your real domain before deploying (see README). -->
+    <link rel="canonical" href="https://bodiedgpt.example/" />
+
+    <!-- Open Graph / social previews -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="BodiedGPT" />
+    <meta property="og:title" content="BodiedGPT — What does an AI do if it's given a body and freedom?" />
+    <meta property="og:description" content="Give an AI a body on an island and complete freedom. Watch its thoughts, wishes and actions in real time." />
+    <meta property="og:url" content="https://bodiedgpt.example/" />
+    <meta property="og:image" content="https://bodiedgpt.example/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="BodiedGPT — What does an AI do if it's given a body and freedom?" />
+    <meta name="twitter:description" content="Give an AI a body on an island and complete freedom. Watch what it does." />
+    <meta name="twitter:image" content="https://bodiedgpt.example/og-image.png" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "BodiedGPT",
+        "description": "An experiment that gives an AI a body on a 3D island and complete freedom, and shows what it thinks, wants and does.",
+        "applicationCategory": "EducationalApplication",
+        "operatingSystem": "Any (modern web browser)",
+        "url": "https://bodiedgpt.example/",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <noscript>
+      <main style="font-family: -apple-system, sans-serif; color: #eee; padding: 40px; max-width: 640px">
+        <h1>BodiedGPT</h1>
+        <p>What does an AI do if it's given a body and freedom? This experiment needs JavaScript and WebGL to run.</p>
+      </main>
+    </noscript>
+    <h1 class="sr-only">BodiedGPT — What does an AI do if it's given a body and freedom?</h1>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
