@@ -56,7 +56,7 @@ class WorldObject {
   update(dt) {
     if (this.light) {
       const t = performance.now();
-      this.light.intensity = 6 + Math.sin(t * 0.013) * 1.2 + Math.sin(t * 0.031) * 0.7;
+      this.light.intensity = (6 + Math.sin(t * 0.013) * 1.2 + Math.sin(t * 0.031) * 0.7) * (this.lightBoost || 1);
     }
     if (this.maxAmount > 0 && this.amount === 0) {
       this._regrow += dt;

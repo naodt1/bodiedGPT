@@ -98,7 +98,8 @@ Upload `dist/` to any static host (Vercel, Netlify, Cloudflare Pages, GitHub Pag
 **Before deploying:**
 
 1. Replace `https://bodiedgpt.example` with your real domain in `index.html` (canonical, Open Graph, Twitter, JSON-LD), `public/robots.txt` and `public/sitemap.xml`.
-2. Add a 1200×630 social preview image as `public/og-image.png`. A screenshot of a run works well.
+2. The social preview image `public/og-image.png` (1200×630) is included. To re-capture it after changing the look, open `http://localhost:5173/?og=1` (a staged, UI-free campfire scene) and screenshot it at 1200×630, for example with headless Chrome:
+   `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --window-size=1200,630 --virtual-time-budget=6000 --screenshot=public/og-image.png "http://localhost:5173/?og=1"`
 3. If your host lets you set HTTP headers, you can also serve the Content-Security-Policy from `index.html` as a header.
 
 **Using local Ollama from the deployed site:** in the browser, the site talks to `http://localhost:11434` directly, since there is no dev proxy in production. Ollama rejects unknown websites (HTTP 403) unless you allow your domain:

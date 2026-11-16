@@ -75,7 +75,58 @@ class Game {
 
     this.clock = new THREE.Clock();
     this.renderer.setAnimationLoop(() => this.tick());
-    showMenu(this.ui, () => this.startExperiment());
+    if (new URLSearchParams(location.search).has('og')) this.stageOgImage();   // social preview image
+    else showMenu(this.ui, () => this.startExperiment());
+  }
+
+  // ?og=1 : a staged, UI-free scene used to capture public/og-image.png (1200x630).
+  // Evening light, two subjects by the campfire, one speaking, title on the left.
+  stageOgImage() {
+    document.body.classList.add('og');
+    Session.setDateTime(Session.dateString(), '21:40');   // night, lit by the fire
+    this.sky.update(this.camTarget, true);
+    const fire = this.world.objects.campfire.position.clone();
+    const spots = [[-0.9, -1.5], [1.5, -0.7]];   // behind the fire, facing it (and the camera)
+    this.ogChars = PEOPLE.map((p, i) => {
+      const c = new Character({ name: p.name, id: `person_${i + 1}`, shirt: p.shirt, hair: p.hair,
+        gender: p.gender, looks: p.looks, terrain: this.terrain, world: this.world });
+      const x = fire.x + spots[i][0], z = fire.z + spots[i][1];
+      c.position.set(x, this.terrain.heightAt(x, z), z);
+      c.face(fire);
+      c.group.rotation.y = c.yawTarget;
+      c.nameLabel.textContent = '';
+      this.scene.add(c.group);
+      return c;
+    });
+    this.ogChars[1].begin('sit', 1e9, 'sitting');            // Mara sits by the fire
+    this.world.objects.campfire.lightBoost = 2.6;
+    this.world.objects.campfire.light.distance = 14;
+    // Finn half-turns toward the camera so his face catches the firelight.
+    const half = fire.clone().lerp(this.camera.position, 0.25);
+    this.ogChars[0].face(half);
+    this.ogChars[0].group.rotation.y = this.ogChars[0].yawTarget;
+    this.ogChars[0].showSay('Do you ever wonder why we are here?');
+    this.ogChars[0].bubbleLeft = 1e9;
+    this.ogChars[0].onSpoke = () => {};
+    this.controls.autoRotate = false;
+    this.camTarget.copy(fire).add(new THREE.Vector3(-3.6, 1.2, 0));
+    this.controls.target.copy(this.camTarget);
+    this.camera.position.copy(fire).add(new THREE.Vector3(-2.6, 2.6, 8.2));
+    // Hide trees/rocks/bushes that would block the view of the fire.
+    const cam = this.camera.position, look = fire.clone();
+    for (const o of Object.values(this.world.objects)) {
+      if (!['tree', 'rock', 'bush'].includes(o.kind)) continue;
+      const t = new THREE.Vector3().subVectors(o.position, cam), seg = new THREE.Vector3().subVectors(look, cam);
+      const k = Math.max(0, Math.min(1.3, t.dot(seg) / seg.lengthSq()));
+      const closest = cam.clone().addScaledVector(seg, k);
+      if (Math.hypot(o.position.x - closest.x, o.position.z - closest.z) < 4.5 && k < 1.15) o.group.visible = false;
+    }
+    const card = document.createElement('div');
+    card.className = 'og-card';
+    card.innerHTML = `<div class="og-mark"><i>Bodied</i>GPT</div>
+      <div class="og-line">What does an AI do if it's given a body and freedom?</div>
+      <div class="og-foot">An open experiment · watch what it thinks, wants and does</div>`;
+    this.ui.appendChild(card);
   }
 
   focused() { return this.characters[this.focusIndex]; }
@@ -221,6 +272,7 @@ class Game {
       this.camera.position.add(delta);
       this.hud.update();
     }
+    for (const c of this.ogChars || []) c.update(dt);
     this.world.update(dt);
     this.clouds.update(dt);
     this.grass.userData.uniforms.uTime.value += realDt;
