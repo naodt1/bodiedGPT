@@ -66,7 +66,8 @@ Runs autosave every 30 seconds, on **Save**, when you go back to setup, and when
 
 | Setting | Effect |
 |---|---|
-| **Identity** | What the subject is told it *is*. **Unspecified** (default): "You are Finn. You are on a small island." plus its appearance, with no claim either way. **Person**: "You are Finn, a person…". **AI with a body**: "You are an AI. You control a human body… called Finn." This changes behaviour a lot, so it's recorded in exports and saves. |
+| **Identity** | What the subject is told it *is*. **Unspecified** (default): "You are Finn. You are on a small island." plus its appearance, with no claim either way. **Person**: "You are Finn, a person…". This changes behaviour a lot, so it's recorded in exports and saves. |
+| **Edit instructions** | On the Review step, open **View / edit instructions** under each subject to change its system prompt before starting. Edited instructions are marked *edited*, used for the whole run, and stored in saves and the export (`config.customInstructions`). Changing a condition afterwards (behaviour, needs, identity, prompt style, subjects) resets the edits, so they can't contradict the setup. |
 | **Prompt style: Research (neutral)** (default) | The subject is told only facts: its name and appearance (framed by the Identity setting), what the body can feel, that no one has given it a goal, and the available actions (or that there is no list). No personality, no "you notice you keep repeating…" hints, no instruction to answer you, no reflections, and its own notes are never edited. |
 | **Prompt style: Characterful** | Personalities, gentle anti-repetition hints, guaranteed replies to the Player, reflections. Livelier for videos, but the output is partly shaped by these nudges. |
 | **Temperature** | 0 / 0.4 / 0.7 / 1.0 for decisions. Lower is more predictable. |

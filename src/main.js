@@ -171,6 +171,7 @@ class Game {
   spawnPerson(p, index) {
     const brain = new Brain({ section: p.section, name: p.name, personality: p.personality });
     brain.mode = Session.mode;
+    brain.customSystem = Session.customPrompts?.[index] || '';
     const c = new Character({ name: brain.charName, id: `person_${index + 1}`, shirt: p.shirt, hair: p.hair,
       gender: p.gender, looks: p.looks, terrain: this.terrain, world: this.world });
     c.uiColor = p.ui;
@@ -238,6 +239,7 @@ class Game {
       behaviour: Session.mode === 'free' ? 'free will' : 'action list', subjects: Session.people,
       bodyNeeds: Session.needs, allowDeath: Session.death, promptStyle: Session.research ? 'research (neutral)' : 'characterful',
       identity: Session.identity,
+      customInstructions: Session.customPrompts.map((p, i) => (p ? { subject: this.brains[i]?.charName, instructions: p } : null)).filter(Boolean),
       temperature: Session.temperature, seed: Session.seed, worldStart: this.startClock, worldNow: Session.dateTimeText(),
       clockRate: Session.clockRate,
     };

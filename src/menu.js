@@ -27,7 +27,8 @@ export function showMenu(root, onStart) {
     people: Session.people, names: PEOPLE.map((p) => savedChar(p).name || p.name),
     experiment: `Experiment ${now.toISOString().slice(0, 10)} ${String(now.getHours()).padStart(2, '0')}.${String(now.getMinutes()).padStart(2, '0')}`,
     needs: Session.needs, mode: Session.mode, death: Session.death,
-    research: Session.research, identity: Session.identity, temperature: Session.temperature, seed: Session.seed,
+    research: Session.research, identity: Session.identity === 'person' ? 'person' : 'unspecified', temperature: Session.temperature, seed: Session.seed,
+    customs: ['', ''],   // edited instructions per subject ('' = use the default)
     time: closestTime(), date: Session.dateString(), clock: TIMES[closestTime()][1], rate: Session.clockRate,
     provider: Provider.name, model: '', models: null, modelStatus: '', modelOk: false,
     ollamaUrl: Provider.ollamaUrl, remember: Provider.remember,
@@ -86,6 +87,10 @@ export function showMenu(root, onStart) {
     const k = b.parentElement.dataset.k, v = b.dataset.v;
     st[k] = ['people', 'time', 'rate', 'temperature'].includes(k) ? +v : k === 'needs' || k === 'research' ? v === 'true' : v;
     if (k === 'time') st.clock = TIMES[+v][1];
+    if (['mode', 'needs', 'identity', 'research', 'people'].includes(k) && st.customs.some(Boolean)) {
+      st.customs = ['', ''];
+      st.customsCleared = true;
+    }
     after ? after(k) : render();
   }));
   const bindInput = (id, key) => $(id)?.addEventListener('input', (e) => { st[key] = e.target.value; });
@@ -135,10 +140,9 @@ export function showMenu(root, onStart) {
       <div class="group">
         <div class="cell">
           <div class="cell-top">${badge('users', '#636366')}<span class="cell-label">Identity</span></div>
-          ${seg('identity', [['unspecified', 'Unspecified'], ['person', 'Person'], ['ai', 'AI with a body']])}
+          ${seg('identity', [['unspecified', 'Unspecified'], ['person', 'Person']])}
           <div class="note">${{ unspecified: 'Told only its name and appearance: "You are Finn." It decides what it thinks it is.',
-            person: 'Told it is a person: "You are Finn, a person on a small island."',
-            ai: 'Told the truth: "You are an AI. You control a human body…"' }[st.identity]}</div>
+            person: 'Told it is a person: "You are Finn, a person on a small island."' }[st.identity]}</div>
         </div>
         <div class="cell">
           <div class="cell-top">${badge('flask', '#636366')}<span class="cell-label">Prompt style</span></div>
@@ -207,16 +211,20 @@ export function showMenu(root, onStart) {
         ${row('users', '#0a84ff', 'Subjects', names)}
         ${row('heart', '#ff375f', 'Body needs', st.needs ? (st.death ? 'Hunger & tiredness · can die' : 'Hunger & tiredness') : 'None')}
         ${row('sparkles', '#bf5af2', 'Behaviour', st.mode === 'actions' ? 'Action list' : 'Free will')}
-        ${row('users', '#636366', 'Identity', { unspecified: 'Unspecified', person: 'Person', ai: 'AI with a body' }[st.identity])}
+        ${row('users', '#636366', 'Identity', st.identity === 'person' ? 'Person' : 'Unspecified')}
         ${row('flask', '#636366', 'Method', `${st.research ? 'Research' : 'Characterful'} · temp ${st.temperature} · seed ${st.seed}`)}
         ${row('sun', '#ff9f0a', 'Starts', `${st.date} ${st.clock} · ${RATES.find(([v]) => v === st.rate)?.[1] || ''}`)}
         ${row('cpu', '#8e8e93', 'Model', `${st.provider === 'openai' ? 'OpenAI' : 'Ollama'} · ${st.model || 'auto'}`)}
       </div>
       <div class="group-title">What each subject is told</div>
+      ${st.customsCleared ? '<p class="hint-small">Your edited instructions were reset because a condition changed.</p>' : ''}
       ${PEOPLE.slice(0, st.people).map((p, i) => {
         const t = instructionsPreview({ mode: st.mode, needs: st.needs, person: { ...p, name: st.names[i] }, research: st.research, identity: st.identity });
-        return `<details class="told-block"><summary>${esc(st.names[i])} ${icon('chevron', 12)}</summary>
-          <div class="told-h">Instructions (system prompt)</div><pre>${esc(t.system)}</pre>
+        const edited = !!st.customs[i];
+        return `<details class="told-block" ${edited ? 'open' : ''}><summary><span>${esc(st.names[i])}${edited ? ' <span class="edited">edited</span>' : ''}</span><span class="told-cta">View / edit instructions ${icon('chevron', 12)}</span></summary>
+          <div class="told-h told-row">Instructions (system prompt) - you can edit this
+            <button class="link" data-reset="${i}" ${edited ? '' : 'hidden'}>Reset to default</button></div>
+          <textarea class="prompt-edit" data-custom="${i}" spellcheck="false" data-default="${esc(t.system)}">${esc(st.customs[i] || t.system)}</textarea>
           <div class="told-h">Every turn they also receive</div><ul>${t.perTurn.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
           <div class="told-h">Memory</div><ul>${t.memory.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></details>`;
       }).join('')}`;
@@ -231,7 +239,7 @@ export function showMenu(root, onStart) {
         if (!d) return;
         Object.assign(st, {
           people: d.people, needs: d.needs, mode: d.mode, death: !!d.death,
-          research: d.research ?? false, identity: d.identity ?? 'unspecified', temperature: d.temperature ?? 0.7, seed: d.seed ?? st.seed,
+          research: d.research ?? false, identity: d.identity === 'person' ? 'person' : 'unspecified', customs: (d.customPrompts || []).concat(['', '']).slice(0, 2), temperature: d.temperature ?? 0.7, seed: d.seed ?? st.seed,
           experiment: `${d.name} (repeat)`, rate: d.clockRate ?? st.rate,
         });
         const w = new Date(d.clockMs);
@@ -281,7 +289,20 @@ export function showMenu(root, onStart) {
       $('#w-forget')?.addEventListener('click', () => { Provider.forgetKey(); st.remember = false; st.models = null; render(); });
       if (st.models === null) loadModels();
     },
-    review: () => {},
+    review: () => {
+      st.customsCleared = false;
+      wrap.querySelectorAll('[data-custom]').forEach((ta) => ta.addEventListener('input', () => {
+        const i = +ta.dataset.custom, def = ta.dataset.default;
+        st.customs[i] = ta.value.trim() === def.trim() ? '' : ta.value;
+        const reset = wrap.querySelector(`[data-reset="${i}"]`);
+        reset.hidden = !st.customs[i];
+      }));
+      wrap.querySelectorAll('[data-reset]').forEach((b) => b.addEventListener('click', (e) => {
+        e.preventDefault();
+        st.customs[+b.dataset.reset] = '';
+        render();
+      }));
+    },
   };
 
   // Ask the provider which models exist (installed in Ollama / available on the key).
@@ -336,6 +357,7 @@ export function showMenu(root, onStart) {
     Object.assign(Session, {
       people: st.people, needs: st.needs, mode: st.mode, death: st.needs && st.death,
       research: st.research, identity: st.identity, temperature: st.temperature, seed: st.seed,
+      customPrompts: st.customs.slice(0, st.people),
       clockRate: st.rate, saveName: st.experiment.trim(), pendingLoad: null,
     });
     finish();

@@ -31,7 +31,7 @@ export function saveRun(game) {
   const data = {
     version: 1, name: Session.saveName, savedAt: Date.now(),
     mode: Session.mode, people: Session.people, needs: Session.needs, death: Session.death,
-    research: Session.research, identity: Session.identity, temperature: Session.temperature, seed: Session.seed,
+    research: Session.research, identity: Session.identity, customPrompts: Session.customPrompts, temperature: Session.temperature, seed: Session.seed,
     clockMs: Session.clockMs, clockRate: Session.clockRate,
     characters: game.characters.map((c, i) => ({
       brain: game.brains[i].toJSON(),
@@ -47,7 +47,7 @@ export function saveRun(game) {
 
 export function applySession(d) {
   Object.assign(Session, { mode: d.mode, people: d.people, needs: d.needs, death: d.death, clockMs: d.clockMs, clockRate: d.clockRate, saveName: d.name,
-    research: d.research ?? false, identity: d.identity ?? 'unspecified', temperature: d.temperature ?? 0.7, seed: d.seed ?? Session.seed });
+    research: d.research ?? false, identity: d.identity ?? 'unspecified', customPrompts: d.customPrompts || [], temperature: d.temperature ?? 0.7, seed: d.seed ?? Session.seed });
 }
 
 export function applyWorld(game, d) {

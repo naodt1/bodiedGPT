@@ -609,6 +609,7 @@ export class Brain {
   }
 
   systemPrompt() {
+    if (this.customSystem) return this.customSystem;   // edited by the experimenter before the run
     if (Session.research) return this.systemPromptResearch();
     let t = `${this.intro()}
 ${this.personality}
@@ -665,6 +666,7 @@ Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
   }
 
   systemPromptFree() {
+    if (this.customSystem) return this.customSystem;
     if (Session.research) return this.systemPromptFreeResearch();
     return `${this.intro()}
 ${this.personality}
