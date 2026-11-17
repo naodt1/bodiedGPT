@@ -165,7 +165,7 @@ export function showMenu(root, onStart) {
           <input type="text" class="bare right-text" id="w-ollama" value="${esc(st.ollamaUrl)}" spellcheck="false"></div></div>`}
         <div class="cell">
           <div class="cell-top">${badge('sparkles', '#5e5ce6')}<span class="cell-label">Model</span>
-            <select class="bare right" id="w-model">${(st.models || []).map((m) => `<option ${m === st.model ? 'selected' : ''}>${esc(m)}</option>`).join('') || '<option value="">checking...</option>'}</select></div>
+            <select class="bare right" id="w-model">${(st.models || []).map((m) => `<option ${m === st.model ? 'selected' : ''}>${esc(m)}</option>`).join('') || `<option value="">${st.modelStatus ? 'none' : 'checking...'}</option>`}</select></div>
           <div class="note ${st.modelStatus ? (st.modelOk ? 'ok' : 'bad') : ''}" id="w-mstatus">${esc(st.modelStatus)}</div>
         </div>
       </div>`,

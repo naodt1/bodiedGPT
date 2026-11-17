@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 
 # Replace with your real domain when you deploy (see README)
-Sitemap: https://bodiedgpt.example/sitemap.xml
+Sitemap: https://bodiedgpt.vercel.app/sitemap.xml
