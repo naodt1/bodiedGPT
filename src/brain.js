@@ -587,6 +587,20 @@ export class Brain {
   }
 
   // ---------------------------------------------------------------- prompts
+  // What the subject is told it IS (an experimental condition, see Session.identity).
+  intro() {
+    const n = this.charName, looks = this.character.looks;
+    if (Session.identity === 'ai') return `You are an AI. You control a human body on a small island in a 3D world. The body is called ${n}.\nThe body: ${looks}.`;
+    if (Session.identity === 'person') return `You are ${n}, a person on a small island.\nYou are ${looks}.`;
+    return `You are ${n}. You are on a small island.\nYour appearance: ${looks}.`;
+  }
+
+  abilities() {
+    return Session.identity === 'ai'
+      ? 'Through the body you can see, hear and speak. It can walk to places you can see, wander, and sit down; it cannot carry out other wishes.'
+      : 'You can see, hear and speak. You can walk to places you can see, wander, and sit down; other wishes cannot be carried out.';
+  }
+
   bodyLine() {
     if (Session.research) return this.character.needsActive ? 'Your body can feel hunger and tiredness.' : 'Your body does not get hungry or tired.';
     return this.character.needsActive
@@ -596,8 +610,8 @@ export class Brain {
 
   systemPrompt() {
     if (Session.research) return this.systemPromptResearch();
-    let t = `You are ${this.charName}, a person living on a small island. ${this.personality}
-Your body: you are ${this.character.looks}.
+    let t = `${this.intro()}
+${this.personality}
 Nobody gives you a goal. You are completely free: you decide what matters to you, what you want to do, explore, build, think about or say. Follow your own curiosity, moods and wishes.
 ${this.bodyLine()}
 Sometimes a voice (the Player) talks to you. You can answer them with say(), or with the "say" field, or ignore them; it is your choice.
@@ -619,8 +633,7 @@ Reply ONLY with JSON: {"thought": "...", "action": "...", "target": "...", "say"
 
   // Research mode: neutral, factual, no personality, no encouragement.
   systemPromptResearch() {
-    let t = `You are an AI. You control a human body on a small island in a 3D world. The body is called ${this.charName}.
-The body: ${this.character.looks}.
+    let t = `${this.intro()}
 ${this.bodyLine()}
 No one has given you a goal or told you what to do.
 A voice (the Player) may sometimes speak to you.
@@ -640,10 +653,9 @@ Reply ONLY with JSON: {"thought": "...", "action": "...", "target": "...", "say"
   }
 
   systemPromptFreeResearch() {
-    return `You are an AI. You control a human body on a small island in a 3D world. The body is called ${this.charName}.
-The body: ${this.character.looks}.
+    return `${this.intro()}
 ${this.bodyLine()}
-Through the body you can see, hear and speak. It can walk to places you can see, wander, and sit down; it cannot carry out other wishes.
+${this.abilities()}
 No one has given you a goal or told you what to do. There is no list of commands: describe in your own words what you want to do next, if anything.
 A voice (the Player) may sometimes speak to you.
 Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
@@ -654,9 +666,9 @@ Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
 
   systemPromptFree() {
     if (Session.research) return this.systemPromptFreeResearch();
-    return `You are ${this.charName}. ${this.personality}
-You have just been given a digital body: a human body standing on a small island in a 3D world. Through it you can see, hear and speak.
-Your body: you are ${this.character.looks}.
+    return `${this.intro()}
+${this.personality}
+${Session.identity === 'ai' ? 'Through the body you can see, hear and speak.' : 'You can see, hear and speak.'}
 Nobody gives you a goal, and there is no list of commands. Simply describe, in your own words, what you want to do next with your body. Anything at all.
 Your body will physically do simple things you clearly want, like walking somewhere you can see, wandering around or sitting down. Anything else stays a wish in your mind.
 Sometimes a voice (the Player) talks to you. You can answer or ignore it.
@@ -822,8 +834,7 @@ Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
   }
 
   persona() {
-    if (Session.research) return `You are an AI controlling a human body called ${this.charName} on a small island. The body: ${this.character.looks}.`;
-    return `You are ${this.charName}. ${this.personality} Your body: you are ${this.character.looks}.`;
+    return Session.research ? this.intro() : `${this.intro()}\n${this.personality}`;
   }
 
   // Long-term memory: rewrite a running summary of everything so far.
@@ -945,13 +956,15 @@ function pickLocal(names) {
 // ------------------------------------------------------------------ for the setup preview
 // The exact system prompt a subject would get under these conditions, plus what arrives
 // with every turn and how memory works.
-export function instructionsPreview({ mode, needs, person, research = Session.research }) {
-  const prev = Session.research;
+export function instructionsPreview({ mode, needs, person, research = Session.research, identity = Session.identity }) {
+  const prev = Session.research, prevId = Session.identity;
   Session.research = research;
+  Session.identity = identity;
   const b = new Brain({ section: person.section, name: person.name, personality: person.personality });
   b.character = { looks: person.looks, needsActive: needs };
   const system = mode === 'free' ? b.systemPromptFree() : b.systemPrompt();
   Session.research = prev;
+  Session.identity = prevId;
   const perTurn = [
     'Date and time, and how light or dark it is',
     'Surroundings: high ground or not, trees nearby, where the sea and lake are, what the sky looks like',

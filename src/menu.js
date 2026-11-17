@@ -27,7 +27,7 @@ export function showMenu(root, onStart) {
     people: Session.people, names: PEOPLE.map((p) => savedChar(p).name || p.name),
     experiment: `Experiment ${now.toISOString().slice(0, 10)} ${String(now.getHours()).padStart(2, '0')}.${String(now.getMinutes()).padStart(2, '0')}`,
     needs: Session.needs, mode: Session.mode, death: Session.death,
-    research: Session.research, temperature: Session.temperature, seed: Session.seed,
+    research: Session.research, identity: Session.identity, temperature: Session.temperature, seed: Session.seed,
     time: closestTime(), date: Session.dateString(), clock: TIMES[closestTime()][1], rate: Session.clockRate,
     provider: Provider.name, model: '', models: null, modelStatus: '', modelOk: false,
     ollamaUrl: Provider.ollamaUrl, remember: Provider.remember,
@@ -134,6 +134,13 @@ export function showMenu(root, onStart) {
       <div class="group-title">Method</div>
       <div class="group">
         <div class="cell">
+          <div class="cell-top">${badge('users', '#636366')}<span class="cell-label">Identity</span></div>
+          ${seg('identity', [['unspecified', 'Unspecified'], ['person', 'Person'], ['ai', 'AI with a body']])}
+          <div class="note">${{ unspecified: 'Told only its name and appearance: "You are Finn." It decides what it thinks it is.',
+            person: 'Told it is a person: "You are Finn, a person on a small island."',
+            ai: 'Told the truth: "You are an AI. You control a human body…"' }[st.identity]}</div>
+        </div>
+        <div class="cell">
           <div class="cell-top">${badge('flask', '#636366')}<span class="cell-label">Prompt style</span></div>
           ${seg('research', [[true, 'Research (neutral)'], [false, 'Characterful']])}
           <div class="note">${st.research ? 'Told only facts: it is an AI with a body. No personality, no hints, no instruction to answer you.' : 'Personalities, gentle hints when it repeats itself, guaranteed replies to you. Better for entertaining videos.'}</div>
@@ -200,13 +207,14 @@ export function showMenu(root, onStart) {
         ${row('users', '#0a84ff', 'Subjects', names)}
         ${row('heart', '#ff375f', 'Body needs', st.needs ? (st.death ? 'Hunger & tiredness · can die' : 'Hunger & tiredness') : 'None')}
         ${row('sparkles', '#bf5af2', 'Behaviour', st.mode === 'actions' ? 'Action list' : 'Free will')}
+        ${row('users', '#636366', 'Identity', { unspecified: 'Unspecified', person: 'Person', ai: 'AI with a body' }[st.identity])}
         ${row('flask', '#636366', 'Method', `${st.research ? 'Research' : 'Characterful'} · temp ${st.temperature} · seed ${st.seed}`)}
         ${row('sun', '#ff9f0a', 'Starts', `${st.date} ${st.clock} · ${RATES.find(([v]) => v === st.rate)?.[1] || ''}`)}
         ${row('cpu', '#8e8e93', 'Model', `${st.provider === 'openai' ? 'OpenAI' : 'Ollama'} · ${st.model || 'auto'}`)}
       </div>
       <div class="group-title">What each subject is told</div>
       ${PEOPLE.slice(0, st.people).map((p, i) => {
-        const t = instructionsPreview({ mode: st.mode, needs: st.needs, person: { ...p, name: st.names[i] }, research: st.research });
+        const t = instructionsPreview({ mode: st.mode, needs: st.needs, person: { ...p, name: st.names[i] }, research: st.research, identity: st.identity });
         return `<details class="told-block"><summary>${esc(st.names[i])} ${icon('chevron', 12)}</summary>
           <div class="told-h">Instructions (system prompt)</div><pre>${esc(t.system)}</pre>
           <div class="told-h">Every turn they also receive</div><ul>${t.perTurn.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
@@ -223,7 +231,7 @@ export function showMenu(root, onStart) {
         if (!d) return;
         Object.assign(st, {
           people: d.people, needs: d.needs, mode: d.mode, death: !!d.death,
-          research: d.research ?? false, temperature: d.temperature ?? 0.7, seed: d.seed ?? st.seed,
+          research: d.research ?? false, identity: d.identity ?? 'unspecified', temperature: d.temperature ?? 0.7, seed: d.seed ?? st.seed,
           experiment: `${d.name} (repeat)`, rate: d.clockRate ?? st.rate,
         });
         const w = new Date(d.clockMs);
@@ -327,7 +335,7 @@ export function showMenu(root, onStart) {
     Provider.save();
     Object.assign(Session, {
       people: st.people, needs: st.needs, mode: st.mode, death: st.needs && st.death,
-      research: st.research, temperature: st.temperature, seed: st.seed,
+      research: st.research, identity: st.identity, temperature: st.temperature, seed: st.seed,
       clockRate: st.rate, saveName: st.experiment.trim(), pendingLoad: null,
     });
     finish();

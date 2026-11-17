@@ -11,6 +11,7 @@ export const Session = {
   death: false,         // can die when health reaches 0
   // Method (for reproducible experiments)
   research: true,       // neutral prompts: no personality, no hints, no forced replies
+  identity: 'unspecified',   // what the subject is told it is: 'unspecified' | 'person' | 'ai'
   temperature: 0.7,     // sampling temperature for decisions
   seed: Math.floor(Math.random() * 1e6),   // passed to the model + used for the body's random choices
   clockMs: 0,           // in-world date/time (ms since epoch, local time)

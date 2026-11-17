@@ -157,7 +157,7 @@ class Game {
       Session.pendingLoad = null;
       this.hud.system(`Continued run '${Session.saveName}'. ${Session.dateTimeText()}`);
     } else {
-      this.hud.system(`Run '${Session.saveName}': ${Session.people === 1 ? 'solo' : 'with another person'}, ${Session.needs ? 'hunger & tiredness' : 'no needs'}, ${Session.mode === 'actions' ? 'predefined actions' : 'free will'}, ${Session.research ? 'research prompts' : 'characterful prompts'}, temp ${Session.temperature}, seed ${Session.seed}. ${Session.dateTimeText()}`);
+      this.hud.system(`Run '${Session.saveName}': ${Session.people === 1 ? 'solo' : 'with another person'}, ${Session.needs ? 'hunger & tiredness' : 'no needs'}, ${Session.mode === 'actions' ? 'predefined actions' : 'free will'}, ${Session.research ? 'research prompts' : 'characterful prompts'}, identity: ${Session.identity}, temp ${Session.temperature}, seed ${Session.seed}. ${Session.dateTimeText()}`);
     }
     this.camTarget.copy(this.focused().position).add(new THREE.Vector3(0, 1.4, 0));
     this.controls.target.copy(this.camTarget);
@@ -184,7 +184,8 @@ class Game {
     brain.character = c; brain.world = this.world;
     c.onEvent = (t) => brain.addEvent(t);
     c.onFinished = () => brain.requestDecision();
-    brain.addEvent(Session.mode === 'free' ? 'You open your eyes. You are inside a body for the first time.' : 'You wake up on a small island.');
+    brain.addEvent(Session.identity === 'ai' && Session.mode === 'free' ? 'You open your eyes. You are inside a body for the first time.'
+      : 'You open your eyes. You are on a small island.');
     this.characters.push(c);
     this.brains.push(brain);
   }
@@ -236,6 +237,7 @@ class Game {
       experiment: Session.saveName, exportedAt: new Date().toISOString(),
       behaviour: Session.mode === 'free' ? 'free will' : 'action list', subjects: Session.people,
       bodyNeeds: Session.needs, allowDeath: Session.death, promptStyle: Session.research ? 'research (neutral)' : 'characterful',
+      identity: Session.identity,
       temperature: Session.temperature, seed: Session.seed, worldStart: this.startClock, worldNow: Session.dateTimeText(),
       clockRate: Session.clockRate,
     };
