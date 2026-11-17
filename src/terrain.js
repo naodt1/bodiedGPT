@@ -65,6 +65,23 @@ export class Terrain {
     return best;
   }
 
+  // Nearest SEA (not the lake): first water found outward in 24 directions, ignoring the lake.
+  nearestSea(pos, maxDist = 120) {
+    let best = { dist: 999, point: pos.clone() };
+    for (let i = 0; i < 24; i++) {
+      const a = (Math.PI * 2 * i) / 24, dx = Math.cos(a), dz = Math.sin(a);
+      for (let t = 0; t <= Math.min(maxDist, best.dist); t += 1) {
+        const x = pos.x + dx * t, z = pos.z + dz * t;
+        if (this.heightAt(x, z) < 0) {
+          if (Math.hypot(x - this.lakeCenter.x, z - this.lakeCenter.y) < this.lakeRadius + 2) break;   // that's the lake
+          if (t < best.dist) best = { dist: t, point: new THREE.Vector3(x, 0, z) };
+          break;
+        }
+      }
+    }
+    return best;
+  }
+
   build() {
     this.group.add(this.buildGround());
     this.group.add(this.buildWater());

@@ -317,17 +317,17 @@ export class WorldObjects {
     for (const e of list) {
       const kind = this.objects[e.id].kind;
       if ((e.dist <= radius && out.length < maxN) || !seenKind.has(kind)) {
-        out.push({ id: e.id, dist: e.dist, text: this.objects[e.id].describe(e.dist) });
+        out.push({ id: e.id, dist: e.dist, pos: this.objects[e.id].position, text: this.objects[e.id].describe(e.dist) });
       }
       seenKind.add(kind);
     }
     for (const [pid, p] of Object.entries(this.people)) {
       if (pid === selfId) continue;
       const pd = flatDist(pos, p.position);
-      out.push({ id: pid, dist: pd, text: p.describe(pd) });
+      out.push({ id: pid, dist: pd, pos: p.position, text: p.describe(pd) });
     }
-    const wd = this.terrain.nearestWater(pos).dist;
-    if (wd < 900) out.push({ id: 'lake', dist: wd, text: `lake (fresh water), ${wd.toFixed(1)}m to the shore${wd <= 2.5 ? ' - you can drink here' : ''}` });
+    const water = this.terrain.nearestWater(pos), wd = water.dist;
+    if (wd < 900) out.push({ id: 'lake', dist: wd, pos: water.point, text: `lake (fresh water), ${wd.toFixed(1)}m to the shore${wd <= 2.5 ? ' - you can drink here' : ''}` });
     out.sort((a, b) => a.dist - b.dist);
     return out;
   }

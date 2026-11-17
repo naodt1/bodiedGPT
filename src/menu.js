@@ -27,6 +27,7 @@ export function showMenu(root, onStart) {
     people: Session.people, names: PEOPLE.map((p) => savedChar(p).name || p.name),
     experiment: `Experiment ${now.toISOString().slice(0, 10)} ${String(now.getHours()).padStart(2, '0')}.${String(now.getMinutes()).padStart(2, '0')}`,
     needs: Session.needs, mode: Session.mode, death: Session.death,
+    research: Session.research, temperature: Session.temperature, seed: Session.seed,
     time: closestTime(), date: Session.dateString(), clock: TIMES[closestTime()][1], rate: Session.clockRate,
     provider: Provider.name, model: '', models: null, modelStatus: '', modelOk: false,
     ollamaUrl: Provider.ollamaUrl, remember: Provider.remember,
@@ -83,7 +84,7 @@ export function showMenu(root, onStart) {
     `<button data-v="${v}" class="${String(st[key]) === String(v) ? 'on' : ''}">${l}</button>`).join('')}</div>`;
   const bindSegs = (after) => wrap.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
     const k = b.parentElement.dataset.k, v = b.dataset.v;
-    st[k] = k === 'people' || k === 'time' || k === 'rate' ? +v : k === 'needs' ? v === 'true' : v;
+    st[k] = ['people', 'time', 'rate', 'temperature'].includes(k) ? +v : k === 'needs' || k === 'research' ? v === 'true' : v;
     if (k === 'time') st.clock = TIMES[+v][1];
     after ? after(k) : render();
   }));
@@ -93,8 +94,9 @@ export function showMenu(root, onStart) {
     start: () => `
       <button class="big-choice" id="w-new">${badge('play', '#0a84ff')}<span><b>New experiment</b><small>Set up subjects and conditions</small></span>${icon('chevron', 14)}</button>
       ${saves.length ? `<div class="group-title">Continue a previous run</div><div class="group">${saves.slice(0, 6).map((s) => `
-        <button class="cell run-item" data-key="${s.key}">${badge('history', '#48484a')}
-          <span class="run-text"><span>${esc(s.name)}</span><small>${esc(s.meta)}</small></span><span class="chev">${icon('chevron', 14)}</span></button>`).join('')}</div>`
+        <div class="run-row"><button class="cell run-item" data-key="${s.key}" title="Continue this run">${badge('history', '#48484a')}
+          <span class="run-text"><span>${esc(s.name)}</span><small>${esc(s.meta)}</small></span><span class="chev">${icon('chevron', 14)}</span></button>
+          <button class="repeat" data-repeat="${s.key}" title="New run with the same setup (fresh memories, same seed)">${icon('repeat', 14)}</button></div>`).join('')}</div>`
         : '<p class="empty-note">No previous runs yet.</p>'}`,
 
     subjects: () => `
@@ -128,6 +130,23 @@ export function showMenu(root, onStart) {
         </div>
         ${st.needs ? `<div class="cell"><label class="cell-top switch-row">${badge('alert', '#636366')}<span class="cell-label">Allow death from starvation</span>
           <input type="checkbox" id="w-death" class="switch" ${st.death ? 'checked' : ''}></label></div>` : ''}
+      </div>
+      <div class="group-title">Method</div>
+      <div class="group">
+        <div class="cell">
+          <div class="cell-top">${badge('flask', '#636366')}<span class="cell-label">Prompt style</span></div>
+          ${seg('research', [[true, 'Research (neutral)'], [false, 'Characterful']])}
+          <div class="note">${st.research ? 'Told only facts: it is an AI with a body. No personality, no hints, no instruction to answer you.' : 'Personalities, gentle hints when it repeats itself, guaranteed replies to you. Better for entertaining videos.'}</div>
+        </div>
+        <div class="cell">
+          <div class="cell-top">${badge('sparkles', '#636366')}<span class="cell-label">Temperature</span></div>
+          ${seg('temperature', [[0, '0'], [0.4, '0.4'], [0.7, '0.7'], [1, '1.0']])}
+          <div class="note">Lower = more predictable and repeatable. 0.7 is a natural default.</div>
+        </div>
+        <div class="cell"><div class="cell-top">${badge('repeat', '#636366')}<span class="cell-label">Seed</span>
+          <input type="text" class="bare narrow" id="w-seed" value="${st.seed}" title="Same seed + same setup = same random choices">
+          <button class="link" id="w-newseed">New</button></div>
+          <div class="note">Same seed and settings make a run repeatable (as far as the model allows).</div></div>
       </div>`,
 
     world: () => `
@@ -181,12 +200,13 @@ export function showMenu(root, onStart) {
         ${row('users', '#0a84ff', 'Subjects', names)}
         ${row('heart', '#ff375f', 'Body needs', st.needs ? (st.death ? 'Hunger & tiredness · can die' : 'Hunger & tiredness') : 'None')}
         ${row('sparkles', '#bf5af2', 'Behaviour', st.mode === 'actions' ? 'Action list' : 'Free will')}
+        ${row('flask', '#636366', 'Method', `${st.research ? 'Research' : 'Characterful'} · temp ${st.temperature} · seed ${st.seed}`)}
         ${row('sun', '#ff9f0a', 'Starts', `${st.date} ${st.clock} · ${RATES.find(([v]) => v === st.rate)?.[1] || ''}`)}
         ${row('cpu', '#8e8e93', 'Model', `${st.provider === 'openai' ? 'OpenAI' : 'Ollama'} · ${st.model || 'auto'}`)}
       </div>
       <div class="group-title">What each subject is told</div>
       ${PEOPLE.slice(0, st.people).map((p, i) => {
-        const t = instructionsPreview({ mode: st.mode, needs: st.needs, person: { ...p, name: st.names[i] } });
+        const t = instructionsPreview({ mode: st.mode, needs: st.needs, person: { ...p, name: st.names[i] }, research: st.research });
         return `<details class="told-block"><summary>${esc(st.names[i])} ${icon('chevron', 12)}</summary>
           <div class="told-h">Instructions (system prompt)</div><pre>${esc(t.system)}</pre>
           <div class="told-h">Every turn they also receive</div><ul>${t.perTurn.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
@@ -198,6 +218,20 @@ export function showMenu(root, onStart) {
   const BIND = {
     start: () => {
       $('#w-new').addEventListener('click', () => { st.step = 1; render(); });
+      wrap.querySelectorAll('[data-repeat]').forEach((b) => b.addEventListener('click', () => {
+        const d = saves.find((x) => x.key === b.dataset.repeat)?.data;
+        if (!d) return;
+        Object.assign(st, {
+          people: d.people, needs: d.needs, mode: d.mode, death: !!d.death,
+          research: d.research ?? false, temperature: d.temperature ?? 0.7, seed: d.seed ?? st.seed,
+          experiment: `${d.name} (repeat)`, rate: d.clockRate ?? st.rate,
+        });
+        const w = new Date(d.clockMs);
+        st.date = `${w.getFullYear()}-${String(w.getMonth() + 1).padStart(2, '0')}-${String(w.getDate()).padStart(2, '0')}`;
+        st.names = PEOPLE.map((p, i) => d.characters?.[i]?.brain?.name || st.names[i]);
+        st.step = STEPS.length - 1;   // straight to Review
+        render();
+      }));
       wrap.querySelectorAll('.run-item[data-key]').forEach((b) => b.addEventListener('click', () => {
         const d = loadSave(b.dataset.key);
         if (!d) { $('#w-err').textContent = 'Could not read that run.'; return; }
@@ -213,6 +247,8 @@ export function showMenu(root, onStart) {
     },
     experiment: () => {
       bindSegs();
+      $('#w-seed').addEventListener('input', (e) => { st.seed = parseInt(e.target.value, 10) || 0; });
+      $('#w-newseed').addEventListener('click', () => { st.seed = Math.floor(Math.random() * 1e6); render(); });
       bindInput('#w-exp', 'experiment');
       $('#w-death')?.addEventListener('change', (e) => { st.death = e.target.checked; });
     },
@@ -291,6 +327,7 @@ export function showMenu(root, onStart) {
     Provider.save();
     Object.assign(Session, {
       people: st.people, needs: st.needs, mode: st.mode, death: st.needs && st.death,
+      research: st.research, temperature: st.temperature, seed: st.seed,
       clockRate: st.rate, saveName: st.experiment.trim(), pendingLoad: null,
     });
     finish();

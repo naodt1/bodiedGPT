@@ -6,7 +6,8 @@ import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { mat, box } from './mesh.js';
 import { Needs } from './needs.js';
 import { REACH } from './objects.js';
-import { flatDist, lerp } from './rng.js';
+import { flatDist, lerp, Rng } from './rng.js';
+import { Session } from './session.js';
 import { fmtTime } from './session.js';
 
 const WALK_SPEED = 3.4, TIRED_SPEED = 1.8, WATER_REACH = 2.5;
@@ -35,6 +36,7 @@ export class Character {
     this.dest = new THREE.Vector3(); this.arrive = 1.3; this.targetId = '';
     this.timer = 0; this.walkTime = 0; this.stuckT = 0; this.stuckPos = new THREE.Vector3(); this.side = 1;
     this.sayText = ''; this.intention = ''; this.placeLabel = '';
+    this.rng = new Rng((Session.seed + id.length * 7919 + id.charCodeAt(id.length - 1)) >>> 0);   // reproducible wandering
   }
 
   get position() { return this.group.position; }
@@ -202,7 +204,7 @@ export class Character {
 
   wanderPoint() {
     for (let i = 0; i < 12; i++) {
-      const a = Math.random() * Math.PI * 2, r = 8 + Math.random() * 8;
+      const a = this.rng.float() * Math.PI * 2, r = 8 + this.rng.float() * 8;
       const x = this.position.x + Math.cos(a) * r, z = this.position.z + Math.sin(a) * r;
       if (this.terrain.heightAt(x, z) > 0.6 && Math.hypot(x, z) < 64) return new THREE.Vector3(x, this.terrain.heightAt(x, z), z);
     }

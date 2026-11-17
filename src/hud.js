@@ -22,6 +22,7 @@ export class Hud {
         <button id="tb-inspect" title="Inspector (I)">${icon('eye', 14)} Inspect</button>
         <button id="tb-pause" title="Pause (Space)">${icon('pause', 14)}</button>
         <button id="tb-save" title="Save">${icon('save', 14)}</button>
+        <button id="tb-export" title="Export the full transcript (JSON + CSV)">${icon('download', 14)} Export</button>
         <button id="tb-menu" title="Back to setup (R)">${icon('sidebar', 14)} Setup</button>
       </div>
       <div id="log" class="panel"><h4 id="log-title">THOUGHT LOG</h4><div id="log-body"></div></div>
@@ -55,6 +56,7 @@ export class Hud {
     this.el.querySelectorAll('#insp [data-tab]').forEach((b) => b.addEventListener('click', () => { this.inspTab = b.dataset.tab; this._inspKey = ''; this.renderInspector(); }));
     this.$('#tb-pause').addEventListener('click', () => game.togglePause());
     this.$('#tb-save').addEventListener('click', () => game.saveNow());
+    this.$('#tb-export').addEventListener('click', () => game.exportRun());
     this.$('#tb-menu').addEventListener('click', () => game.backToMenu());
     this.chat.addEventListener('keydown', (e) => {
       e.stopPropagation();

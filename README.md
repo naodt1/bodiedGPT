@@ -60,6 +60,29 @@ The conditions:
 
 Runs autosave every 30 seconds, on **Save**, when you go back to setup, and when the tab closes. Pick one under **Previous runs** to continue with the same memories, positions and in-world time. Saves are stored in your browser (localStorage).
 
+## Research mode and reproducibility
+
+**Method** settings (Experiment step):
+
+| Setting | Effect |
+|---|---|
+| **Prompt style: Research (neutral)** (default) | The subject is told only facts: it is an AI controlling a human body called X, what the body looks like and can feel, that no one has given it a goal, and the available actions (or that there is no list). No personality, no "you notice you keep repeating…" hints, no instruction to answer you, no reflections, and its own notes are never edited. |
+| **Prompt style: Characterful** | Personalities, gentle anti-repetition hints, guaranteed replies to the Player, reflections. Livelier for videos, but the output is partly shaped by these nudges. |
+| **Temperature** | 0 / 0.4 / 0.7 / 1.0 for decisions. Lower is more predictable. |
+| **Seed** | Sent to the model (Ollama `seed`, OpenAI `seed`) and used for the body's random choices (wandering). The same seed and setup give repeatable runs, as far as the model allows. |
+
+**What makes perception and memory more faithful:**
+- **Directions:** everything seen is given with distance and direction relative to where the subject faces (ahead, to your left, behind you…). Other people include what they are doing and whether they face you.
+- **Surroundings:** high ground or not, trees around, where the sea and the lake are, and what the sky looks like.
+- **Long-term memory:** every 12 decisions the subject rewrites a summary of everything so far, which is shown every turn along with the last 12 events.
+- **Free will:** each wish is translated into a physical action by a separate, neutral request at temperature 0 (stay / walk to a visible place / wander / sit), instead of keyword matching. Keyword matching is used only as a fallback if that request fails.
+
+**Exporting a run:** click **Export** in the top bar to download two files:
+- `<experiment>.json`: the configuration (behaviour, subjects, needs, prompt style, temperature, seed, model, world time) and **every request**: system prompt, full context, raw reply, timing, model and seed, for every subject. That includes the wish-reader and memory-summary calls.
+- `<experiment>.csv`: one row per decision, message and note, ready for a spreadsheet.
+
+**Repeating a setup:** under *Continue a previous run*, the ↻ button starts a **new** run with the same conditions, method and seed, but fresh memories, and opens the Review step so you can check it first.
+
 ## Choosing a model
 
 - **Local:** the setup asks your Ollama server which models are installed (`/api/tags`) and lists them. The status line shows `● Connected · N models`, or explains what's wrong.

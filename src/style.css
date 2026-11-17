@@ -382,3 +382,9 @@ body.og #labels .bubble { font-size: 22px; max-width: 380px; padding: 12px 18px;
 .wizard .field-input:focus { border-color: rgba(255,255,255,.55); background: rgba(0,0,0,.45); }
 .wizard a.link { color: rgba(235,235,245,.8); text-decoration: underline; text-underline-offset: 2px; font-size: 13px; margin-left: auto; }
 .wizard .cell-top .link { margin-left: auto; }
+
+.run-row { display: flex; align-items: stretch; }
+.run-row + .run-row { border-top: 0.5px solid rgba(255,255,255,0.07); }
+.run-row .run-item { flex: 1; border-top: none !important; }
+.run-row .repeat { background: none; border: none; border-left: 0.5px solid rgba(255,255,255,0.07); color: rgba(235,235,245,.6); padding: 0 14px; cursor: pointer; }
+.run-row .repeat:hover { color: #fff; background: rgba(255,255,255,.06); }

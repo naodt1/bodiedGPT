@@ -157,12 +157,13 @@ class Game {
       Session.pendingLoad = null;
       this.hud.system(`Continued run '${Session.saveName}'. ${Session.dateTimeText()}`);
     } else {
-      this.hud.system(`Run '${Session.saveName}': ${Session.people === 1 ? 'solo' : 'with another person'}, ${Session.needs ? 'hunger & tiredness' : 'no needs'}, ${Session.mode === 'actions' ? 'predefined actions' : 'free will'}. ${Session.dateTimeText()}`);
+      this.hud.system(`Run '${Session.saveName}': ${Session.people === 1 ? 'solo' : 'with another person'}, ${Session.needs ? 'hunger & tiredness' : 'no needs'}, ${Session.mode === 'actions' ? 'predefined actions' : 'free will'}, ${Session.research ? 'research prompts' : 'characterful prompts'}, temp ${Session.temperature}, seed ${Session.seed}. ${Session.dateTimeText()}`);
     }
     this.camTarget.copy(this.focused().position).add(new THREE.Vector3(0, 1.4, 0));
     this.controls.target.copy(this.camTarget);
     this.camera.position.copy(this.camTarget).add(new THREE.Vector3(6, 4, 7));
     this.started = true;
+    this.startClock = Session.dateTimeText();
     this.autosave = setInterval(() => saveRun(this), AUTOSAVE_MS);
     for (const b of this.brains) if (b.enabled) b.start();
   }
@@ -227,6 +228,37 @@ class Game {
   setFocus(i) { this.focusIndex = i; this.hud.updateChatHint(); }
   setSpeed(s) { this.paused = false; this.timeScale = s; }
   togglePause() { this.paused = !this.paused; }
+  // Download everything needed to analyse or reproduce this run:
+  //  <name>.json : configuration + every prompt and reply for every subject
+  //  <name>.csv  : one row per decision (easy to open in a spreadsheet)
+  exportRun() {
+    const config = {
+      experiment: Session.saveName, exportedAt: new Date().toISOString(),
+      behaviour: Session.mode === 'free' ? 'free will' : 'action list', subjects: Session.people,
+      bodyNeeds: Session.needs, allowDeath: Session.death, promptStyle: Session.research ? 'research (neutral)' : 'characterful',
+      temperature: Session.temperature, seed: Session.seed, worldStart: this.startClock, worldNow: Session.dateTimeText(),
+      clockRate: Session.clockRate,
+    };
+    const subjects = this.brains.map((b, i) => ({
+      name: b.charName, id: this.characters[i].id, looks: this.characters[i].looks, model: b.currentModel(),
+      personality: Session.research ? null : b.personality, decisions: b.decisionCount, alive: this.characters[i].state !== 'dead',
+      summary: b.summary, notes: b.impressions, knownNames: b.knownNames, deaths: b.deaths,
+    }));
+    const transcript = this.brains.flatMap((b) => b.transcript);
+    const data = { config, subjects, transcript, log: this.hud.entries };
+    const safe = (Session.saveName || 'run').replace(/[^a-z0-9._-]+/gi, '_');
+    download(`${safe}.json`, JSON.stringify(data, null, 2), 'application/json');
+    const rows = [['game_time', 'subject', 'type', 'action_or_wish', 'target', 'thought', 'said']];
+    for (const e of this.hud.entries) {
+      if (e.system) rows.push(['', '', 'note', e.system, '', '', '']);
+      else if (e.player) rows.push([e.time, 'PLAYER', 'message', '', e.to, '', e.player]);
+      else if (e.feeling) rows.push([e.time, e.who, 'note_about_' + e.about, '', '', e.feeling, '']);
+      else rows.push([e.time, e.who, e.error ? 'error' : 'decision', e.action === 'intend' ? e.intention : e.action, e.target || '', e.thought || '', e.say || '']);
+    }
+    download(`${safe}.csv`, rows.map((r) => r.map(csv).join(',')).join('\n'), 'text/csv');
+    this.hud.system(`Exported ${transcript.length} requests and ${rows.length - 1} log rows`);
+  }
+
   saveNow() { if (saveRun(this)) this.hud.system(`Saved run '${Session.saveName}'`); }
 
   backToMenu() {
@@ -287,5 +319,15 @@ class Game {
     this.labels.render(this.scene, this.camera);
   }
 }
+
+function download(name, text, type) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: name });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+const csv = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
 
 new Game();

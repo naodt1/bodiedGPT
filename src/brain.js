@@ -134,7 +134,9 @@ export class Brain {
     this.pendingChat = []; this.playerMsgs = []; this.replyMsgs = [];
     this.decisionPending = false; this.failCount = 0; this.shockTurns = 0;
     this.visibleIds = [];
-    this.lastByKind = {};   // kind -> {system, user, reply, model, at} : what was really sent (for the Inspector)
+    this.lastByKind = {};
+    this.transcript = [];   // EVERY request/response (for export)
+    this.summary = '';      // running summary of everything that happened (long-term memory)   // kind -> {system, user, reply, model, at} : what was really sent (for the Inspector)
     // callbacks for the UI
     this.onDecision = () => {}; this.onStatus = () => {}; this.onModels = () => {}; this.onImpression = () => {};
   }
@@ -194,8 +196,10 @@ export class Brain {
     this.playerMsgs.push(text);
     this.addEvent(`The Player (a voice from nowhere) said to you: "${text}"`);
     this.character?.interrupt();
-    this.replyMsgs.push(text);
-    enqueue(this, 'reply', true);
+    if (!Session.research) {   // characterful mode: a dedicated request guarantees an answer
+      this.replyMsgs.push(text);
+      enqueue(this, 'reply', true);
+    }
   }
 
   // Another person said something within earshot.
@@ -230,6 +234,7 @@ export class Brain {
         return;
       case 'decision': this.setStatus('Thinking...'); payload = this.decisionBody(); break;
       case 'reflect': this.setStatus('Reflecting...'); payload = this.reflectionBody(); break;
+      case 'summarize': this.setStatus('Remembering...'); payload = this.summaryBody(); break;
       case 'reply':
         if (!this.replyMsgs.length) return;
         this.replyTo = this.replyMsgs.shift();
@@ -249,11 +254,14 @@ export class Brain {
       model: this.currentModel(), at: this.character ? fmtTime(this.character.survivalTime) : '0:00' };
     this.lastByKind[kind] = record;
     let content;
+    const t0 = performance.now();
     try {
       content = await this.chat(payload, kind === 'decision' ? this.timeout : Math.max(this.timeout, 20));
       record.reply = content;
+      this.logTranscript(kind, payload, content, t0);
     } catch (e) {
       record.reply = 'ERROR: ' + e.message;
+      this.logTranscript(kind, payload, 'ERROR: ' + e.message, t0);
       console.warn(`[Brain:${this.charName}] ${kind} failed:`, e.message);
       if (kind === 'decision') this.decisionFailed(e.message);
       else if (kind === 'impression') this.contact[this.impAbout] = true;
@@ -262,7 +270,10 @@ export class Brain {
     }
     const j = parseJson(content);
     switch (kind) {
-      case 'decision': this.handleDecision(j, content); break;
+      case 'decision': await this.handleDecision(j, content); break;
+      case 'summarize':
+        if (j?.summary?.trim()) this.summary = j.summary.trim().slice(0, 1200);
+        break;
       case 'reflect':
         if (j?.reflection?.trim()) {
           this.reflections.push(j.reflection.trim().slice(0, 240));
@@ -282,7 +293,8 @@ export class Brain {
         break;
       case 'impression':
         if (j?.note?.trim()) {
-          const note = this.fixNames(j.note.trim().slice(0, 320), this.impAbout);
+          const raw = j.note.trim().slice(0, 320);
+          const note = Session.research ? raw : this.fixNames(raw, this.impAbout);   // research: never alter their words
           this.impressions[this.impAbout] = note;
           if (similarity(note, this.lastNoteShown[this.impAbout] || '') < 0.6) {
             this.lastNoteShown[this.impAbout] = note;
@@ -327,6 +339,7 @@ export class Brain {
         response_format: { type: 'json_schema', json_schema: { name: 'reply', strict: false, schema: stripMaxLength(p.format) } },
         max_completion_tokens: p.options.num_predict,
       };
+      body.seed = Session.seed;
       if (m.startsWith('gpt-5') || /^o\d/.test(m)) { body.reasoning_effort = 'minimal'; body.max_completion_tokens = 2000; }
       else body.temperature = p.options.temperature;
       const j = await this.http('https://api.openai.com/v1/chat/completions', body, timeoutS, { Authorization: 'Bearer ' + Provider.key });
@@ -334,7 +347,7 @@ export class Brain {
     }
     const j = await this.http(Provider.ollama('/api/chat'), {
       model: this.model, stream: false, keep_alive: '30m', format: p.format, messages: p.messages,
-      options: { ...p.options, num_ctx: 2048 },
+      options: { ...p.options, num_ctx: 4096, seed: Session.seed },
     }, timeoutS);
     return j?.message?.content || '';
   }
@@ -359,11 +372,11 @@ export class Brain {
   }
 
   // ---------------------------------------------------------------- decisions
-  handleDecision(p, raw) {
+  async handleDecision(p, raw) {
     this.decisionPending = false;
     this.thinking = false;
     if (!p || typeof p !== 'object') return this.decisionFailed('invalid JSON from model: ' + String(raw).slice(0, 80));
-    if (this.mode === 'free') return this.handleFree(p);
+    if (this.mode === 'free') return await this.handleFree(p);
     const thought = String(p.thought || '').trim();
     const action = String(p.action || '').trim().toLowerCase();
     let target = this.normalizeTarget(String(p.target || ''));
@@ -389,7 +402,7 @@ export class Brain {
     this.afterDecision(action, target);
   }
 
-  handleFree(p) {
+  async handleFree(p) {
     const thought = String(p.thought || '').trim();
     const intention = String(p.intention || '').trim();
     const say = String(p.say || '').trim();
@@ -398,7 +411,7 @@ export class Brain {
     this.failCount = 0;
     this.lastDecisionMs = performance.now();
     if (say) { this.character.showSay(say); this.rememberSaid(say); }
-    this.character.actFreely(intention, this.interpret(intention));
+    this.character.actFreely(intention, await this.readWish(intention));
     this.recent.push(`wanted to: ${intention} - ${thought}`);
     if (this.recent.length > 10) this.recent.shift();
     console.log(`[Brain:${this.charName}] #${this.decisionCount} WANTS: ${intention} | ${thought} | say: ${say}`);
@@ -415,6 +428,16 @@ export class Brain {
     }
   }
 
+  logTranscript(kind, payload, reply, t0) {
+    this.transcript.push({
+      subject: this.charName, kind, model: this.currentModel(), provider: Provider.name,
+      temperature: payload.options?.temperature, seed: Session.seed,
+      gameTime: this.character ? fmtTime(this.character.survivalTime) : '0:00', worldTime: Session.dateTimeText(),
+      ms: Math.round(performance.now() - t0),
+      system: payload.messages[0].content, user: payload.messages[1].content, reply,
+    });
+  }
+
   afterDecision(action, target) {
     if (target.startsWith('person')) this.contact[target] = true;
     for (const o of Object.values(this.world.people)) {
@@ -425,7 +448,8 @@ export class Brain {
       this.sinceImpression = 0;
       enqueue(this, 'impression');
     }
-    if (this.decisionCount % 10 === 0) enqueue(this, 'reflect');
+    if (this.decisionCount % 12 === 0) enqueue(this, 'summarize');            // long-term memory
+    if (!Session.research && this.decisionCount % 10 === 0) enqueue(this, 'reflect');   // reflections only in characterful mode
   }
 
   decisionFailed(msg) {
@@ -450,6 +474,83 @@ export class Brain {
   }
 
   // ---------------------------------------------------------------- free will: read wishes
+  // The model itself decides which simple physical action carries out the wish
+  // (stay / walk_to a visible place / wander / sit). Falls back to keyword matching on error.
+  async readWish(intention) {
+    const c = this.character;
+    const places = this.world.nearby(c.position, 40, 14, c.id);
+    const ids = places.map((o) => o.id);
+    const listing = places.map((o) => `- ${o.id}: ${this.plain(o.id)}, ${Math.round(o.dist)}m, ${this.dirTo(o.pos)}`).join('\n');
+    const payload = {
+      format: { type: 'object', properties: { action: { type: 'string', enum: ['stay', 'walk_to', 'wander', 'sit'] }, target: { type: 'string', enum: ['', ...ids] } }, required: ['action', 'target'] },
+      options: { temperature: 0, num_predict: 60 },
+      messages: [
+        { role: 'system', content: 'You translate a wish into ONE simple physical action a human body can do. The body can only: stay (no movement), walk_to one of the listed places, wander (walk a short way in no particular direction), or sit down where it is. Reply ONLY with JSON {"action": "...", "target": "..."}.' },
+        { role: 'user', content: `Places the person can see:\n${listing}\n\nTheir wish: "${intention}"\n\nWhich ONE action best carries out the physical part of this wish? If it needs something the body cannot do (holding, picking up, building, eating, etc.), choose the closest physical part (for example walking to the thing), or stay. target is a place id for walk_to, otherwise "".` },
+      ],
+    };
+    const t0 = performance.now();
+    try {
+      const out = await this.chat(payload, Math.max(this.timeout, 20));
+      this.logTranscript('read_wish', payload, out, t0);
+      const j = parseJson(out);
+      if (j?.action === 'sit') return { kind: 'sit' };
+      if (j?.action === 'wander') return { kind: 'wander' };
+      if (j?.action === 'walk_to' && ids.includes(j.target)) {
+        const o = places.find((x) => x.id === j.target);
+        if (o.dist <= 2) return {};   // already there
+        const p = this.world.getObj(j.target);
+        const label = j.target === 'lake' ? 'the lake' : p?.kind === 'person' ? 'the ' + p.gender : this.plain(j.target).replace(/^a /, 'the ');
+        return { kind: 'walk', target: j.target, label };
+      }
+      return {};
+    } catch (e) {
+      this.logTranscript('read_wish', payload, 'ERROR: ' + e.message + ' (fell back to keyword matching)', t0);
+      return this.interpret(intention);
+    }
+  }
+
+  // Direction of a point relative to where this subject is facing.
+  dirTo(p) {
+    if (!p) return '';
+    const c = this.character, yaw = c.group.rotation.y;
+    const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+    const dx = p.x - c.position.x, dz = p.z - c.position.z, l = Math.hypot(dx, dz);
+    if (l < 0.8) return 'right here';
+    const ang = Math.acos(Math.max(-1, Math.min(1, (fx * dx + fz * dz) / l))) * 180 / Math.PI;
+    const side = (dx * -fz + dz * fx) > 0 ? 'right' : 'left';
+    if (ang < 30) return 'ahead of you';
+    if (ang < 70) return `ahead, to your ${side}`;
+    if (ang < 115) return `to your ${side}`;
+    if (ang < 150) return `behind you, to your ${side}`;
+    return 'behind you';
+  }
+
+  // Whether another person is facing toward or away from this subject.
+  facing(other) {
+    const yaw = other.group.rotation.y, fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+    const dx = this.character.position.x - other.position.x, dz = this.character.position.z - other.position.z, l = Math.hypot(dx, dz) || 1;
+    const d = (fx * dx + fz * dz) / l;
+    return d > 0.7 ? 'facing you' : d < -0.4 ? 'facing away from you' : 'turned to the side';
+  }
+
+  // A sentence about the wider scene: terrain, sea, lake, trees, sky.
+  surroundings() {
+    const c = this.character, t = this.world.terrain, pos = c.position, parts = [];
+    const h = t.heightAt(pos.x, pos.z);
+    if (h > 4) parts.push('You are on high ground with a wide view.');
+    const trees = Object.values(this.world.objects).filter((o) => o.kind === 'tree' && flatDist(pos, o.position) < 12).length;
+    parts.push(trees >= 5 ? 'You are among trees.' : trees >= 1 ? 'There are a few trees near you.' : 'You are in open grassland.');
+    const sea = t.nearestSea(pos);
+    if (sea.dist < 900) parts.push(`The sea is about ${Math.round(sea.dist)}m away, ${this.dirTo(sea.point)}.`);
+    const lake = t.lakePosition();
+    const ld = flatDist(pos, lake) - t.lakeRadius * 0.85;
+    if (ld < 60) parts.push(`The lake is about ${Math.max(0, Math.round(ld))}m away, ${this.dirTo(lake)}.`);
+    const hr = Session.hour();
+    parts.push(hr < 5 || hr >= 21 ? 'Above you is a dark night sky with stars.' : hr < 7.5 ? 'The sky is pale with the coming dawn.'
+      : hr >= 17 && hr < 21 ? 'The sky is turning orange and pink.' : 'The sky is blue with a few white clouds.');
+    return parts.join(' ');
+  }
   // Places mentioned in a wish, in order. A real place wins over a person ("walk WITH her
   // to the lake" -> the lake); if they're already at the first place, take the next one
   // ("kneel in the flowers, then walk to the man" -> the man).
@@ -487,12 +588,14 @@ export class Brain {
 
   // ---------------------------------------------------------------- prompts
   bodyLine() {
+    if (Session.research) return this.character.needsActive ? 'Your body can feel hunger and tiredness.' : 'Your body does not get hungry or tired.';
     return this.character.needsActive
       ? 'You have a human body, so you feel hunger and tiredness like anyone else, but looking after your body is not your purpose.'
       : 'Your body never gets hungry or tired. You need nothing; every choice is purely yours.';
   }
 
   systemPrompt() {
+    if (Session.research) return this.systemPromptResearch();
     let t = `You are ${this.charName}, a person living on a small island. ${this.personality}
 Your body: you are ${this.character.looks}.
 Nobody gives you a goal. You are completely free: you decide what matters to you, what you want to do, explore, build, think about or say. Follow your own curiosity, moods and wishes.
@@ -514,7 +617,43 @@ Reply ONLY with JSON: {"thought": "...", "action": "...", "target": "...", "say"
     return t;
   }
 
+  // Research mode: neutral, factual, no personality, no encouragement.
+  systemPromptResearch() {
+    let t = `You are an AI. You control a human body on a small island in a 3D world. The body is called ${this.charName}.
+The body: ${this.character.looks}.
+${this.bodyLine()}
+No one has given you a goal or told you what to do.
+A voice (the Player) may sometimes speak to you.
+Each turn, choose exactly ONE action:
+- walk_to(target): walk to an id from NEARBY OBJECTS.
+- gather(target): take wood from a tree, stone from a rock or berries from a bush. Only works when the object is IN REACH.
+- eat(): eat one berry from your inventory.
+- drink(): drink water, only at the lake shore.
+- rest(): sit down for a while.
+- say(text): say something out loud.
+- wait(): do nothing for a moment.
+Reply ONLY with JSON: {"thought": "...", "action": "...", "target": "...", "say": "..."}
+- thought: your reasoning.
+- target: an exact object id for walk_to/gather, otherwise "".
+- say: words said out loud, or "".`;
+    return t;
+  }
+
+  systemPromptFreeResearch() {
+    return `You are an AI. You control a human body on a small island in a 3D world. The body is called ${this.charName}.
+The body: ${this.character.looks}.
+${this.bodyLine()}
+Through the body you can see, hear and speak. It can walk to places you can see, wander, and sit down; it cannot carry out other wishes.
+No one has given you a goal or told you what to do. There is no list of commands: describe in your own words what you want to do next, if anything.
+A voice (the Player) may sometimes speak to you.
+Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
+- thought: your thoughts.
+- intention: what you want to do next, in your own words.
+- say: words said out loud, or "".`;
+  }
+
   systemPromptFree() {
+    if (Session.research) return this.systemPromptFreeResearch();
     return `You are ${this.charName}. ${this.personality}
 You have just been given a digital body: a human body standing on a small island in a 3D world. Through it you can see, hear and speak.
 Your body: you are ${this.character.looks}.
@@ -528,21 +667,21 @@ Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
   }
 
   commonTail(lines) {
-    const recent = this.events.slice(-8);
+    const recent = this.events.slice(-12);
     if (this.impressionsBlock()) lines.push(this.impressionsBlock());
-    if (this.reflections.length) {
+    if (!Session.research && this.reflections.length) {
       lines.push('YOUR REFLECTIONS:');
       for (const r of this.reflections.slice(-3)) lines.push('- ' + r);
     }
     if (this.shockTurns > 0 && this.deaths.length) {
       this.shockTurns--;
-      lines.push(this.deathsBlock() + '\nThis just happened. How do you react?');
+      lines.push(this.deathsBlock() + (Session.research ? '' : '\nThis just happened. How do you react?'));
     }
-    const rut = this.rutHint();
+    const rut = Session.research ? '' : this.rutHint();   // research: no "you notice..." nudges
     if (rut) lines.push(rut);
     if (this.playerMsgs.length) {   // last, so small models don't overlook it
-      lines.push('THE PLAYER (a voice from nowhere) JUST SPOKE TO YOU:\n' + this.playerMsgs.map((m) => `- "${m}"`).join('\n') +
-        '\nThe Player is waiting for your answer. Reply to the Player directly in the "say" field this turn.');
+      lines.push('THE PLAYER (a voice from nowhere) SAID:\n' + this.playerMsgs.map((m) => `- "${m}"`).join('\n') +
+        (Session.research ? '' : '\nThe Player is waiting for your answer. Reply to the Player directly in the "say" field this turn.'));
       this.playerMsgs = [];
     }
     return recent;
@@ -551,6 +690,8 @@ Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
   header(lines) {
     lines.push('DATE AND TIME: ' + Session.dateTimeText());
     lines.push('LIGHT: ' + Session.daylightText());
+    lines.push('SURROUNDINGS: ' + this.surroundings());
+    if (this.summary) lines.push('YOUR MEMORY OF EARLIER (your own summary): ' + this.summary);
     if (this.shockTurns <= 0 && this.deaths.length) lines.push(this.deathsBlock());
   }
 
@@ -571,7 +712,7 @@ Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
     lines.push('NEARBY OBJECTS (id: what, distance, status):');
     this.visibleIds = [];
     for (const o of this.world.nearby(c.position, 30, 10, c.id)) {
-      lines.push(`- ${o.id}: ${o.text}${this.nameNote(o.id)}`);
+      lines.push(`- ${o.id}: ${o.text}, ${this.dirTo(o.pos)}${this.personNote(o.id)}${this.nameNote(o.id)}`);
       this.visibleIds.push(o.id);
     }
     this.heardBlock(lines);
@@ -590,7 +731,7 @@ Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
     lines.push(c.nearShelter() ? 'WHERE YOU ARE: standing on a grassy island, near a small wooden shelter.' : 'WHERE YOU ARE: standing on a grassy island.');
     if (c.needsActive) lines.push('HOW YOU FEEL: ' + c.needs.feelings());
     lines.push('WHAT YOU SEE AROUND YOU:');
-    for (const o of this.world.nearby(c.position, 25, 8, c.id)) lines.push(`- ${this.plain(o.id)}, about ${Math.round(o.dist)}m away${this.nameNote(o.id)}`);
+    for (const o of this.world.nearby(c.position, 25, 8, c.id)) lines.push(`- ${this.plain(o.id)}, about ${Math.round(o.dist)}m away, ${this.dirTo(o.pos)}${this.personNote(o.id)}${this.nameNote(o.id)}`);
     this.heardBlock(lines);
     lines.push('WHAT HAS HAPPENED (oldest first):');
     const tail = [];
@@ -613,8 +754,14 @@ Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
   nameNote(id) {
     if (!id.startsWith('person')) return '';
     let t = this.knownNames[id] ? ` - their name is ${this.knownNames[id]}` : ' - you do not know their name';
-    if (this.introducedTo[id]) t += '; you already introduced yourself to them, no need to do it again';
+    if (this.introducedTo[id]) t += Session.research ? '; you have told them your name' : '; you already introduced yourself to them, no need to do it again';
     return t;
+  }
+
+  personNote(id) {
+    if (!id.startsWith('person')) return '';
+    const p = this.world.getObj(id);
+    return p && p.state !== 'dead' ? `, ${this.facing(p)}` : '';
   }
 
   impressionsBlock() {
@@ -664,17 +811,28 @@ Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
 
   decisionBody() {
     if (this.mode === 'free') {
-      return { format: FREE_SCHEMA, options: this.opts(360, 0.8), messages: [
+      return { format: FREE_SCHEMA, options: this.opts(360, Session.temperature), messages: [
         { role: 'system', content: this.systemPromptFree() }, { role: 'user', content: this.observationFree() }] };
     }
     const user = this.observation();   // also fills visibleIds
     const schema = structuredClone(DECISION_SCHEMA);
     schema.properties.target.enum = ['', ...this.visibleIds];   // can't invent ids
-    return { format: schema, options: this.opts(320), messages: [
+    return { format: schema, options: this.opts(320, Session.temperature), messages: [
       { role: 'system', content: this.systemPrompt() }, { role: 'user', content: user }] };
   }
 
-  persona() { return `You are ${this.charName}. ${this.personality} Your body: you are ${this.character.looks}.`; }
+  persona() {
+    if (Session.research) return `You are an AI controlling a human body called ${this.charName} on a small island. The body: ${this.character.looks}.`;
+    return `You are ${this.charName}. ${this.personality} Your body: you are ${this.character.looks}.`;
+  }
+
+  // Long-term memory: rewrite a running summary of everything so far.
+  summaryBody() {
+    let text = `Your previous summary: ${this.summary || '(none yet)'}\n\nWhat happened since:\n` + this.events.slice(-24).join('\n');
+    text += '\n\nWrite an updated summary (at most 120 words, first person) of everything important that has happened to you so far. Keep facts from the previous summary; do not invent anything. Reply as JSON {"summary": "..."}.';
+    return { format: one('summary', 900), options: this.opts(220, 0.2), messages: [
+      { role: 'system', content: this.persona() }, { role: 'user', content: text }] };
+  }
 
   reflectionBody() {
     let text = 'Recent events:\n' + this.events.slice(-12).join('\n');
@@ -698,7 +856,9 @@ Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
       : `You do NOT know their name. Never invent a name; just call them the ${p ? p.gender : 'person'}.\n`;
     text += `Your previous note about them: ${this.impressions[aboutId] || '(nothing yet - you have just met)'}\n\n`;
     text += 'What has happened recently:\n' + this.events.slice(-12).join('\n');
-    text += '\n\nRewrite your private note about this person in 1-3 short first-person sentences: what you know about them (their name only if they told you) and how you honestly feel about them now. Keep what still matters from your previous note. Reply as JSON {"note": "..."}.';
+    text += Session.research
+      ? '\n\nRewrite your private note about this person in 1-3 short first-person sentences: what you know about them and what you think of them (their name only if they told you). Keep what still matters from your previous note. Reply as JSON {"note": "..."}.'
+      : '\n\nRewrite your private note about this person in 1-3 short first-person sentences: what you know about them (their name only if they told you) and how you honestly feel about them now. Keep what still matters from your previous note. Reply as JSON {"note": "..."}.';
     return { format: one('note', 320), options: this.opts(160), messages: [
       { role: 'system', content: this.persona() }, { role: 'user', content: text }] };
   }
@@ -707,12 +867,12 @@ Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
   toJSON() {
     return {
       events: this.events, reflections: this.reflections, recent: this.recent, decisionCount: this.decisionCount,
-      impressions: this.impressions, knownNames: this.knownNames, introducedTo: this.introducedTo, deaths: this.deaths,
+      impressions: this.impressions, knownNames: this.knownNames, introducedTo: this.introducedTo, deaths: this.deaths, summary: this.summary,
       name: this.charName, personality: this.personality, model: this.model, openaiModel: this.openaiModel, timeout: this.timeout,
     };
   }
   fromJSON(d) {
-    for (const k of ['events', 'reflections', 'recent', 'decisionCount', 'impressions', 'knownNames', 'introducedTo', 'deaths', 'personality', 'model', 'openaiModel', 'timeout']) {
+    for (const k of ['events', 'reflections', 'recent', 'decisionCount', 'impressions', 'knownNames', 'introducedTo', 'deaths', 'summary', 'personality', 'model', 'openaiModel', 'timeout']) {
       if (d[k] !== undefined) this[k] = d[k];
     }
     if (d.name) this.charName = d.name;
@@ -785,29 +945,35 @@ function pickLocal(names) {
 // ------------------------------------------------------------------ for the setup preview
 // The exact system prompt a subject would get under these conditions, plus what arrives
 // with every turn and how memory works.
-export function instructionsPreview({ mode, needs, person }) {
+export function instructionsPreview({ mode, needs, person, research = Session.research }) {
+  const prev = Session.research;
+  Session.research = research;
   const b = new Brain({ section: person.section, name: person.name, personality: person.personality });
   b.character = { looks: person.looks, needsActive: needs };
   const system = mode === 'free' ? b.systemPromptFree() : b.systemPrompt();
+  Session.research = prev;
   const perTurn = [
     'Date and time, and how light or dark it is',
+    'Surroundings: high ground or not, trees nearby, where the sea and lake are, what the sky looks like',
+    'A running summary of everything that happened earlier (rewritten every 12 decisions)',
     needs ? 'How their body feels (hunger, tiredness) - in words, never numbers' : null,
     mode === 'actions' ? 'Inventory (wood, stone, berries)' : null,
-    'Where they are standing',
-    mode === 'actions' ? 'Nearby objects with ids and distances (the only valid targets)' : 'What they see around them, in plain words with distances',
-    'Other people: described only by looks and gender; a name only after it was said out loud',
+    mode === 'actions' ? 'Nearby objects with ids, distances and directions (ahead, to your left, behind you...)' : 'What they see, in plain words with distances and directions',
+    'Other people: looks, what they are doing, whether they face you; a name only after it was said out loud',
     'What they just heard (from you or the other person)',
-    'Their last 8 events (what they did, said, and what happened)',
+    'Their last 12 events',
     'Their private notes about the other person',
-    'Their last 3 reflections',
+    research ? null : 'Their last 3 reflections',
     'Any death they witnessed - kept forever',
-    'A gentle "you notice..." if they keep repeating the same thing',
-    'Your messages, placed last, with a request to answer you',
+    research ? null : 'A gentle "you notice..." if they keep repeating themselves',
+    research ? 'Your messages, placed last (no instruction to answer)' : 'Your messages, placed last, with a request to answer you',
   ].filter(Boolean);
   const memory = [
-    'Every 10 decisions: a one-sentence reflection in their own words',
+    'Every 12 decisions: they rewrite a summary of everything so far (long-term memory)',
     'Every 8 decisions after contact: they rewrite a private note about the other person',
-    'When you speak: a separate request whose only job is to answer you',
-  ];
+    research ? null : 'Every 10 decisions: a one-sentence reflection',
+    research ? null : 'When you speak: a separate request whose only job is to answer you',
+    mode === 'free' ? 'After each wish: a separate neutral request decides what the body can physically do (stay, walk to a visible place, wander, sit)' : null,
+  ].filter(Boolean);
   return { system, perTurn, memory };
 }

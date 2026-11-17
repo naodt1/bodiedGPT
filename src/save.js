@@ -13,7 +13,7 @@ export function listSaves() {
       const d = JSON.parse(localStorage.getItem(k));
       const when = new Date(d.clockMs);
       out.push({
-        key: k, savedAt: d.savedAt, name: d.name,
+        key: k, savedAt: d.savedAt, name: d.name, data: d,
         meta: `${d.people === 1 ? '1 subject' : '2 subjects'} · ${d.needs ? 'needs' : 'no needs'} · ${d.mode === 'free' ? 'free will' : 'action list'} · ` +
           `in-world ${when.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} ${when.toTimeString().slice(0, 5)}`,
       });
@@ -31,6 +31,7 @@ export function saveRun(game) {
   const data = {
     version: 1, name: Session.saveName, savedAt: Date.now(),
     mode: Session.mode, people: Session.people, needs: Session.needs, death: Session.death,
+    research: Session.research, temperature: Session.temperature, seed: Session.seed,
     clockMs: Session.clockMs, clockRate: Session.clockRate,
     characters: game.characters.map((c, i) => ({
       brain: game.brains[i].toJSON(),
@@ -45,7 +46,8 @@ export function saveRun(game) {
 }
 
 export function applySession(d) {
-  Object.assign(Session, { mode: d.mode, people: d.people, needs: d.needs, death: d.death, clockMs: d.clockMs, clockRate: d.clockRate, saveName: d.name });
+  Object.assign(Session, { mode: d.mode, people: d.people, needs: d.needs, death: d.death, clockMs: d.clockMs, clockRate: d.clockRate, saveName: d.name,
+    research: d.research ?? false, temperature: d.temperature ?? 0.7, seed: d.seed ?? Session.seed });
 }
 
 export function applyWorld(game, d) {
