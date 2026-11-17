@@ -155,8 +155,10 @@ export function showMenu(root, onStart) {
         </div>
         ${st.provider === 'openai' ? `
         <div class="cell">
-          <div class="cell-top">${badge('key', '#ff9f0a')}<input type="password" class="bare" id="w-key" autocomplete="off" spellcheck="false"
-            placeholder="OpenAI API key" value="${Provider.key ? '••••••••' : ''}"><button class="link" id="w-forget">Forget</button></div>
+          <div class="cell-top">${badge('key', '#ff9f0a')}<span class="cell-label">OpenAI API key</span>
+            ${Provider.key ? '<button class="link" id="w-forget">Forget</button>' : '<a class="link" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">Get a key</a>'}</div>
+          <input type="password" class="field-input" id="w-key" autocomplete="off" spellcheck="false"
+            placeholder="Paste your key here (sk-...)" value="${Provider.key ? '••••••••••••' : ''}">
           <label class="cell-top switch-row"><span class="cell-label small">Remember on this device</span>
             <input type="checkbox" id="w-remember" class="switch" ${st.remember ? 'checked' : ''}></label>
           <div class="note">Sent only from your browser to api.openai.com. Never saved in runs or sent anywhere else.</div>
@@ -219,7 +221,18 @@ export function showMenu(root, onStart) {
       bindSegs((k) => { if (k === 'provider') { st.models = null; st.model = ''; } render(); });
       $('#w-model').addEventListener('change', (e) => { st.model = e.target.value; });
       $('#w-ollama')?.addEventListener('change', (e) => { st.ollamaUrl = e.target.value.trim() || st.ollamaUrl; Provider.ollamaUrl = st.ollamaUrl; st.models = null; render(); });
-      $('#w-key')?.addEventListener('change', (e) => { const v = e.target.value.trim(); if (v && !v.startsWith('•')) Provider.key = v; st.models = null; render(); });
+      // Check the key as soon as it's pasted/typed (short debounce), not only on blur.
+      let keyTimer = 0;
+      $('#w-key')?.addEventListener('input', (e) => {
+        clearTimeout(keyTimer);
+        const v = e.target.value.trim();
+        if (!v || v.startsWith('•') || v.length < 40) return;   // wait until it looks like a whole key
+        keyTimer = setTimeout(() => { Provider.key = v; st.models = null; render(); }, 400);
+      });
+      $('#w-key')?.addEventListener('change', (e) => {
+        const v = e.target.value.trim();
+        if (v && !v.startsWith('•') && v !== Provider.key) { clearTimeout(keyTimer); Provider.key = v; st.models = null; render(); }
+      });
       $('#w-remember')?.addEventListener('change', (e) => { st.remember = e.target.checked; });
       $('#w-forget')?.addEventListener('click', () => { Provider.forgetKey(); st.remember = false; st.models = null; render(); });
       if (st.models === null) loadModels();

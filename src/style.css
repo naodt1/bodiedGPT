@@ -372,3 +372,13 @@ body.og #labels .bubble { font-size: 22px; max-width: 380px; padding: 12px 18px;
 .og-mark i { font-family: inherit; font-style: italic; font-weight: 400; font-size: 1em; color: rgba(235,235,245,.62); }
 .og-line { font-family: inherit; font-style: normal; font-weight: 500; font-size: 40px; color: #f5f5f7; letter-spacing: -0.01em; }
 .og-card { background: linear-gradient(90deg, rgba(6,6,8,.92) 0%, rgba(6,6,8,.75) 55%, rgba(6,6,8,0) 100%); }
+
+/* clearly visible text field (API key) */
+.wizard .field-input {
+  width: 100%; padding: 10px 12px; font: inherit; font-size: 14px; color: var(--text);
+  background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.16); border-radius: 7px; outline: none;
+}
+.wizard .field-input::placeholder { color: rgba(235,235,245,.42); }
+.wizard .field-input:focus { border-color: rgba(255,255,255,.55); background: rgba(0,0,0,.45); }
+.wizard a.link { color: rgba(235,235,245,.8); text-decoration: underline; text-underline-offset: 2px; font-size: 13px; margin-left: auto; }
+.wizard .cell-top .link { margin-left: auto; }
