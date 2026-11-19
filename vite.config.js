@@ -11,6 +11,7 @@ export default defineConfig({
         howItWorks: 'how-it-works.html',
         results: 'results.html',
         references: 'references.html',
+        changes: 'changes.html',
       },
     },
   },

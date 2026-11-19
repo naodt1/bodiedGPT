@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'none';" />
+  <title>Changes — BodiedGPT</title>
+  <meta name="description" content="Changes to BodiedGPT that affect experiments: prompts, identity, perception, memory and free will, with the reason for each and what it means for comparing runs." />
+  <link rel="canonical" href="https://bodiedgpt.vercel.app/changes.html" />
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="BodiedGPT — changes" />
+  <meta property="og:description" content="Every change that affects experiments, and why it was made." />
+  <meta property="og:url" content="https://bodiedgpt.vercel.app/changes.html" />
+  <meta property="og:image" content="https://bodiedgpt.vercel.app/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="theme-color" content="#0c0c0e" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/src/article.css" />
+</head>
+<body>
+  <header class="top"><div class="top-inner">
+    <a class="wordmark" href="/"><i>Bodied</i>GPT</a>
+    <nav><a href="/how-it-works.html">How it works</a><a href="/results.html">Results</a><a href="/references.html">References</a><a href="/changes.html" aria-current="page">Changes</a></nav>
+  </div></header>
+
+  <main>
+    <p class="kicker">Changes</p>
+    <h1>What changed, and why</h1>
+    <p class="lede">A log of every change that affects how subjects behave or how results should be read. Runs made before a change are not directly comparable with runs made after it.</p>
+    <div class="note"><strong>How to use this.</strong> Every exported run records its full setup and every prompt, so you can always check exactly what a subject was told. Use this page to know which runs can be compared.</div>
+
+    <div class="chg"><div class="chg-date">19 Nov 2026</div><div>
+      <h3>"The Player" is now "the Voice" <span class="tag t-prompt">prompt</span></h3>
+      <p>Subjects used to be told that "a voice (the Player)" might speak to them. They are now told only that "a voice" may speak to them, and its words arrive as from "the Voice".</p>
+      <p class="why"><b>Why:</b> "Player" frames the island as a game, which may push models toward game-like behaviour. It was not renamed "the Experimenter" on purpose, because that would tell subjects they are being studied.</p>
+      <p class="impact"><b>Comparability:</b> affects every run where the experimenter speaks. In the interface and exports the speaker is now labelled "Experimenter".</p>
+    </div></div>
+
+    <div class="chg"><div class="chg-date">19 Nov 2026</div><div>
+      <h3>Memory stream, retrieval and insights <span class="tag t-memory">memory</span></h3>
+      <p>Memory now follows the Generative Agents design: every event is stored with an importance score, older memories are retrieved by recency, importance and relevance, and insights are drawn when enough important things have happened. The periodic "reflection" request was replaced by these insights.</p>
+      <p class="why"><b>Why:</b> subjects forgot important moments (first meetings, deaths) and repeated themselves. Retrieval brings them back when they matter.</p>
+      <p class="impact"><b>Comparability:</b> large. Earlier runs only saw recent events and a running summary.</p>
+    </div></div>
+
+    <div class="chg"><div class="chg-date">19 Nov 2026</div><div>
+      <h3>Interviews that do not change the subject <span class="tag t-method">method</span></h3>
+      <p>The Interview tab asks a subject a question answered from its memories, without storing the question or the answer.</p>
+      <p class="why"><b>Why:</b> talking to a subject normally becomes part of its memory and changes the experiment. Interviews let you probe without that.</p>
+    </div></div>
+
+    <div class="chg"><div class="chg-date">19 Nov 2026</div><div>
+      <h3>"You are already there" feedback <span class="tag t-prompt">feedback</span></h3>
+      <p>When a subject wishes to go somewhere it is already standing, it is told "You are already at the meadow." Before, it was told "your body did not do it".</p>
+      <p class="why"><b>Why:</b> the old message was wrong in that case and caused loops: subjects kept repeating the same wish. Some loops in earlier runs were caused by this, not by the model.</p>
+    </div></div>
+
+    <div class="chg"><div class="chg-date">17 Nov 2026</div><div>
+      <h3>Editable instructions; "AI with a body" removed <span class="tag t-condition">condition</span></h3>
+      <p>The Review step shows each subject's exact instructions and lets you edit them. The identity option "an AI controlling a body" was removed, leaving Unspecified and Person.</p>
+      <p class="why"><b>Why:</b> the AI framing made subjects detached and observational ("the person inside this body"), which answers a different question from the one this project asks. Anyone who wants it can still write it into the instructions.</p>
+      <p class="impact"><b>Comparability:</b> runs with edited instructions record the edited text in their export.</p>
+    </div></div>
+
+    <div class="chg"><div class="chg-date">17 Nov 2026</div><div>
+      <h3>Identity became a condition, "AI" no longer said by default <span class="tag t-condition">condition</span></h3>
+      <p>Subjects used to be told they were an AI controlling a body. Now the default is "You are Finn." with no identity, and identity is a visible, recorded choice.</p>
+      <p class="why"><b>Why:</b> framing changed behaviour a lot. Telling the model what it is should be a deliberate condition, not a hidden default.</p>
+      <p class="impact"><b>Comparability:</b> large. Earlier runs all used the AI framing.</p>
+    </div></div>
+
+    <div class="chg"><div class="chg-date">17 Nov 2026</div><div>
+      <h3>Research mode: neutral prompts, richer perception, export <span class="tag t-prompt">prompt</span></h3>
+      <p>A neutral research mode became the default: facts only, no personality, no hints, no instruction to answer the voice. Perception gained directions relative to facing, surroundings (sea, lake, sky, trees) and whether others are facing you. Temperature and seed became part of the setup, and every prompt and reply can be exported.</p>
+      <p class="why"><b>Why:</b> personalities and nudges make livelier videos but leak into results. The old style is still available as "Characterful".</p>
+      <p class="impact"><b>Comparability:</b> large. Earlier runs used characterful prompts.</p>
+    </div></div>
+
+    <div class="chg"><div class="chg-date">16 Nov 2026</div><div>
+      <h3>Web version <span class="tag t-method">method</span></h3>
+      <p>BodiedGPT moved from a Godot prototype to the browser. Quotes marked "Godot prototype" on the Results page come from the earlier version, with different prompts and memory.</p>
+    </div></div>
+
+    <a class="cta" href="/">Run an experiment</a>
+  </main>
+  <footer class="site">BodiedGPT · runs in your browser · <a href="https://github.com/naodt1/bodiedGPT" rel="noopener">source on GitHub</a></footer>
+</body>
+</html>

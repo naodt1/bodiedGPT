@@ -66,6 +66,7 @@ export function showMenu(root, onStart) {
         <a href="/how-it-works.html">${iconFilled('doc', 18)}<span><b>How it works</b><small>Prompts, perception, memory, free will</small></span>${icon('chevron', 14)}</a>
         <a href="/results.html">${iconFilled('chart', 18)}<span><b>Results</b><small>What the subjects actually did</small></span>${icon('chevron', 14)}</a>
         <a href="/references.html">${iconFilled('book', 18)}<span><b>References</b><small>The research it builds on</small></span>${icon('chevron', 14)}</a>
+        <a href="/changes.html">${iconFilled('history', 18)}<span><b>Changes</b><small>What changed in the method, and why</small></span>${icon('chevron', 14)}</a>
       </nav>
       <p class="fine">Runs in your browser · no account · your API key stays with you</p>
     </section>

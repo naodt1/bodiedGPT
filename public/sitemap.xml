@@ -4,4 +4,5 @@
   <url><loc>https://bodiedgpt.vercel.app/how-it-works.html</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://bodiedgpt.vercel.app/results.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
   <url><loc>https://bodiedgpt.vercel.app/references.html</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://bodiedgpt.vercel.app/changes.html</loc><changefreq>weekly</changefreq><priority>0.5</priority></url>
 </urlset>
