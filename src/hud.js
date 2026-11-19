@@ -1,6 +1,6 @@
 // hud.js - filming HUD: top bar (date, person, model, speed buttons), scrollable thought
 // log, hotbar, hunger/tiredness bars, chat box, banner, and the Tab settings panel.
-import { Session } from './session.js';
+import { Session, fmtTime } from './session.js';
 import { Needs } from './needs.js';
 import { Provider } from './brain.js';
 import { icon } from './icons.js';
@@ -18,12 +18,14 @@ export class Hud {
     this.el.innerHTML = `
       <div id="topbar" class="panel">
         <span id="tb-text"></span>
-        <button data-speed="1">1x</button><button data-speed="2">2x</button><button data-speed="4">4x</button>
-        <button id="tb-inspect" title="Inspector (I)">${icon('eye', 14)} Inspect</button>
-        <button id="tb-pause" title="Pause (Space)">${icon('pause', 14)}</button>
-        <button id="tb-save" title="Save">${icon('save', 14)}</button>
-        <button id="tb-export" title="Export the full transcript (JSON + CSV)">${icon('download', 14)} Export</button>
-        <button id="tb-menu" title="Back to setup (R)">${icon('sidebar', 14)} Setup</button>
+        <span class="tb-div"></span>
+        <div class="seg" role="group" aria-label="Speed"><button data-speed="1">1×</button><button data-speed="2">2×</button><button data-speed="4">4×</button></div>
+        <button id="tb-pause" class="b-primary b-icon" title="Pause (Space)">${icon('pause', 15)}</button>
+        <span class="tb-div"></span>
+        <button id="tb-inspect" class="b-outline" title="Inspector (I)">${icon('eye', 14)} Inspect</button>
+        <button id="tb-export" class="b-outline" title="Export the full transcript (JSON + CSV)">${icon('download', 14)} Export</button>
+        <button id="tb-save" class="b-ghost b-icon" title="Save">${icon('save', 15)}</button>
+        <button id="tb-menu" class="b-ghost b-icon" title="Back to setup (R)">${icon('sidebar', 15)}</button>
       </div>
       <div id="log" class="panel"><h4 id="log-title">THOUGHT LOG</h4><div id="log-body"></div></div>
       <div id="hotbar" class="panel">
@@ -40,7 +42,7 @@ export class Hud {
         <div class="head"><b id="insp-who"></b><span id="insp-meta"></span></div>
         <div class="tabs">
           <button data-tab="instructions">Instructions</button><button data-tab="context">Context</button>
-          <button data-tab="memory">Memory</button><button data-tab="reply">Last reply</button>
+          <button data-tab="memory">Memory</button><button data-tab="interview">Interview</button><button data-tab="reply">Last reply</button>
         </div>
         <div class="body" id="insp-body"></div>
       </div>
@@ -53,7 +55,7 @@ export class Hud {
     this.el.querySelectorAll('[data-speed]').forEach((b) => b.addEventListener('click', () => game.setSpeed(+b.dataset.speed)));
     this.inspTab = 'instructions';
     this.$('#tb-inspect').addEventListener('click', () => this.toggleInspector());
-    this.el.querySelectorAll('#insp [data-tab]').forEach((b) => b.addEventListener('click', () => { this.inspTab = b.dataset.tab; this._inspKey = ''; this.renderInspector(); }));
+    this.el.querySelectorAll('#insp [data-tab]').forEach((b) => b.addEventListener('click', () => { this.inspTab = b.dataset.tab; this._inspKey = ''; this._ivFor = null; this._ivKey = ''; this.renderInspector(); }));
     this.$('#tb-pause').addEventListener('click', () => game.togglePause());
     this.$('#tb-save').addEventListener('click', () => game.saveNow());
     this.$('#tb-export').addEventListener('click', () => game.exportRun());
@@ -71,7 +73,7 @@ export class Hud {
   updateChatHint() {
     const c = this.game.focused();
     this.chat.placeholder = (this.game.characters.length > 1 ? 'Enter: talk to everyone' : `Enter: talk to ${c.charName}`) +
-      '   |   F switch · drag orbit · 1/2/3 speed · Space pause · Tab settings · H hide · K K die · R menu';
+      '   |   F focus subject · drag orbit · 1/2/3 clock rate · Space pause · Tab settings · H hide HUD · K K intervene: end subject · R end run';
   }
 
   // ---------------------------------------------------------------- log
@@ -92,8 +94,9 @@ export class Hud {
 
   format(e) {
     if (e.system) return `<div class="entry sys">— ${esc(e.system)} —</div>`;
-    if (e.player) return `<div class="entry player"><span class="t">${e.time}</span><b>YOU → ${esc(e.to)}:</b> ${esc(e.player)}</div>`;
+    if (e.player) return `<div class="entry player"><span class="t">${e.time}</span><b>Experimenter → ${esc(e.to)}:</b> ${esc(e.player)}</div>`;
     const who = `<span class="who" style="color:${this.nameColor(e.who)}">${esc(e.who)}</span>`;
+    if (e.insight) return `<div class="entry feel"><span class="t">${e.time}</span>${who}<span class="act">insight:</span><div class="thought">${esc(e.insight)}</div></div>`;
     if (e.feeling) return `<div class="entry feel"><span class="t">${e.time}</span>${who}<span class="act">feelings about ${esc(e.about)}:</span><div class="thought">${esc(e.feeling)}</div></div>`;
     if (e.error) return `<div class="entry err"><span class="t">${e.time}</span>${who}<span class="act">brain error → wait()</span><div class="thought">${esc(e.thought)}</div></div>`;
     const col = ACTION_COLORS[e.action] || '#fff';
@@ -107,9 +110,12 @@ export class Hud {
   update() {
     const g = this.game, c = g.focused(), b = g.focusedBrain();
     const since = ((performance.now() - b.lastDecisionMs) / 1000).toFixed(1);
-    const speed = g.paused ? 'PAUSED' : g.timeScale + 'x';
-    const extra = ['Ready', 'Thinking...'].includes(b.status) ? '' : ` <span class="sep">|</span> ${esc(b.status)}`;
-    this.$('#tb-text').innerHTML = `${Session.dateTimeText()} <span class="sep">|</span> ${esc(c.charName)} <span class="sep">|</span> ${esc(b.currentModel())} <span class="sep">|</span> ${since}s since last decision <span class="sep">|</span> ${speed}${extra}`;
+    const st = ['Ready', 'Thinking...'].includes(b.status) ? '' : `<span class="tb-status">${esc(b.status)}</span>`;
+    const nDec = g.brains.reduce((n, x) => n + (x.decisionCount || 0), 0);
+    const cond = `${Session.people === 1 ? 'solo' : 'pair'} · ${Session.mode === 'actions' ? 'action list' : 'free will'} · ${Session.research ? 'research' : 'characterful'}`;
+    this.$('#tb-text').innerHTML = `<span class="tb-run" title="${esc(cond)}">RUN · ${esc(Session.saveName)}</span><span class="tb-meta">${nDec} decision${nDec === 1 ? '' : 's'} · ${fmtTime(c.survivalTime)}</span><span class="tb-div"></span><span class="tb-date">${Session.dateTimeText()}</span><span class="tb-who">${esc(c.charName)}</span><span class="tb-chip">${esc(b.currentModel())}</span><span class="tb-since" title="Since last decision">${g.paused ? 'paused' : since + 's'}</span>${st}`;
+    const pb = this.$('#tb-pause'), pi = g.paused ? 'play' : 'pause';
+    if (pb.dataset.ic !== pi) { pb.dataset.ic = pi; pb.innerHTML = icon(pi, 15); pb.title = g.paused ? 'Resume (Space)' : 'Pause (Space)'; }
     this.el.querySelectorAll('[data-speed]').forEach((x) => x.classList.toggle('active', !g.paused && +x.dataset.speed === g.timeScale));
     this.$('#tb-pause').classList.toggle('active', g.paused);
     for (const k of ['wood', 'stone', 'berries']) this.$('#inv-' + k).textContent = c.inventory[k];
@@ -147,6 +153,8 @@ export class Hud {
     } else if (this.inspTab === 'context') {
       html = dec ? `<div class="insp-h">Everything they were shown at ${dec.at} (last decision)</div><pre>${esc(dec.user)}</pre>`
         : '<div class="empty">No decision yet.</div>';
+    } else if (this.inspTab === 'interview') {
+      return this.renderInterview(b, c);
     } else if (this.inspTab === 'memory') {
       const list = (arr) => arr.length ? `<ul>${arr.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '<div class="empty">nothing yet</div>';
       const people = Object.values(g.world.people).filter((p) => p !== c);
@@ -154,8 +162,10 @@ export class Hud {
         `<li><b>${esc(p.looks)}</b> (${p.id})<br>name: ${esc(b.knownNames[p.id] || 'unknown - never told')}${b.introducedTo[p.id] ? ' · introduced themselves' : ''}<br>
          note: ${esc(b.impressions[p.id] || '(none yet)')}</li>`).join('')}</ul>` : '<div class="empty">alone on the island</div>') +
         `<div class="insp-h">Never forgotten</div>${list(b.deaths.map((d) => d.text))}` +
-        `<div class="insp-h">Reflections (${b.reflections.length})</div>${list(b.reflections)}` +
-        `<div class="insp-h">Event memory (last ${b.events.length}; the newest 8 go into each prompt)</div>${list(b.events.slice().reverse())}`;
+        `<div class="insp-h">Summary (rewritten every 12 decisions)</div>${list(b.summary ? [b.summary] : [])}` +
+        `<div class="insp-h">Older memories in the last prompt (recency + importance + relevance)</div>${list(b.retrieved.map(({ m }) => `[${m.importance}] ${m.text}`))}` +
+        `<div class="insp-h">Memory stream: ${b.mem.items.length} memories, newest first · [importance 1-10] · ${b.embedModel || Provider.name === 'openai' ? 'embeddings' : 'word-overlap'} relevance</div>` +
+        list(b.mem.items.slice().reverse().slice(0, 80).map((m) => `[${m.importance}${m.scored ? '' : '?'}] ${m.kind === 'insight' ? 'INSIGHT: ' : ''}${m.text}`));
     } else {
       const rows = Object.entries(b.lastByKind).map(([k, r]) => `<div class="insp-h">${k} · ${r.at} · ${esc(r.model)}</div><pre>${esc(r.reply)}</pre>`);
       html = rows.length ? rows.join('') : '<div class="empty">No replies yet.</div>';
@@ -163,6 +173,33 @@ export class Hud {
     this.$('#insp-who').textContent = c.charName;
     this.$('#insp-meta').textContent = `${b.currentModel()} · ${b.decisionCount} decisions`;
     if (html !== this._inspKey) { this._inspKey = html; this.$('#insp-body').innerHTML = html; }
+  }
+
+  // Interview: questions are answered from the subject's memories and are NOT stored in them.
+  renderInterview(b, c) {
+    const body = this.$('#insp-body');
+    if (this._ivFor !== b) {
+      this._ivFor = b;
+      this._inspKey = 'interview';
+      body.innerHTML = `<div class="insp-h">Ask ${esc(c.charName)} anything. The answer comes from their memories; the question does not enter their memory, so the experiment is not affected.</div>
+        <div class="iv-form"><input type="text" id="iv-q" placeholder="e.g. What do you think of the person you met?" autocomplete="off"><button class="btn" id="iv-ask">Ask</button></div>
+        <div id="iv-history"></div>`;
+      const ask = () => {
+        const q = this.$('#iv-q').value.trim();
+        if (!q) return;
+        this.$('#iv-q').value = '';
+        b.interviews = b.interviews || [];
+        b.interviews.push({ q, a: null, at: '' });
+        b.interview(q);
+        this._ivKey = '';
+      };
+      this.$('#iv-ask').addEventListener('click', ask);
+      this.$('#iv-q').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') ask(); });
+    }
+    const hist = (b.interviews || []).slice().reverse().map((x) => `<div class="iv-item"><div class="iv-q">Q: ${esc(x.q)}</div>
+      <div class="iv-a">${x.a == null ? '<i>thinking...</i>' : esc(x.a)}</div>${x.at ? `<div class="iv-t">at ${x.at}</div>` : ''}</div>`).join('') || '<div class="empty">No questions yet.</div>';
+    if (hist !== this._ivKey) { this._ivKey = hist; this.$('#iv-history').innerHTML = hist; }
+    this.$('#insp-who').textContent = c.charName;
   }
 
   banner(text, seconds = 0) {

@@ -43,6 +43,15 @@ Then pick an AI provider:
   Smaller and lighter: `phi3:mini`, `qwen2.5:1.5b`. Smarter but heavier: `llama3.1:8b`, `qwen2.5:7b`.
 - **OpenAI (cloud):** choose **OpenAI** in the setup and paste an API key. See [API key safety](#api-key-safety) first.
 
+## Ready-made scenarios
+
+On the Welcome step, one click fills in the whole setup and opens Review. You can check and edit everything, including each subject's instructions, before pressing **Start experiment**.
+
+| Scenario | Setup |
+|---|---|
+| **Alone** | 1 subject, free will, no needs, research prompts, unspecified identity, morning. The baseline. |
+| **Two strangers** | 2 subjects who are never told the other exists, free will, no needs, research prompts, morning. |
+
 ## Running an experiment
 
 The launch screen has two cards: an **about** card, and a step-by-step setup with **Back / Next**. The steps are Welcome (new or continue), **Subjects** (one or two, and their names), **Experiment** (name and conditions), **World** (start time), **AI** (provider and model), and **Review** (the full configuration and what each subject is told) → **Start experiment**.
@@ -69,7 +78,7 @@ Runs autosave every 30 seconds, on **Save**, when you go back to setup, and when
 | **Identity** | What the subject is told it *is*. **Unspecified** (default): "You are Finn. You are on a small island." plus its appearance, with no claim either way. **Person**: "You are Finn, a person…". This changes behaviour a lot, so it's recorded in exports and saves. |
 | **Edit instructions** | On the Review step, open **View / edit instructions** under each subject to change its system prompt before starting. Edited instructions are marked *edited*, used for the whole run, and stored in saves and the export (`config.customInstructions`). Changing a condition afterwards (behaviour, needs, identity, prompt style, subjects) resets the edits, so they can't contradict the setup. |
 | **Prompt style: Research (neutral)** (default) | The subject is told only facts: its name and appearance (framed by the Identity setting), what the body can feel, that no one has given it a goal, and the available actions (or that there is no list). No personality, no "you notice you keep repeating…" hints, no instruction to answer you, no reflections, and its own notes are never edited. |
-| **Prompt style: Characterful** | Personalities, gentle anti-repetition hints, guaranteed replies to the Player, reflections. Livelier for videos, but the output is partly shaped by these nudges. |
+| **Prompt style: Characterful** | Personalities, gentle anti-repetition hints, guaranteed replies to the experimenter, reflections. Livelier for videos, but the output is partly shaped by these nudges. |
 | **Temperature** | 0 / 0.4 / 0.7 / 1.0 for decisions. Lower is more predictable. |
 | **Seed** | Sent to the model (Ollama `seed`, OpenAI `seed`) and used for the body's random choices (wandering). The same seed and setup give repeatable runs, as far as the model allows. |
 
@@ -84,6 +93,18 @@ Runs autosave every 30 seconds, on **Save**, when you go back to setup, and when
 - `<experiment>.csv`: one row per decision, message and note, ready for a spreadsheet.
 
 **Repeating a setup:** under *Continue a previous run*, the ↻ button starts a **new** run with the same conditions, method and seed, but fresh memories, and opens the Review step so you can check it first.
+
+## Memory and interviews (from Stanford's "Generative Agents")
+
+Adapted from Park et al., *Generative Agents: Interactive Simulacra of Human Behavior* (Stanford/Google, 2023):
+
+- **Memory stream:** everything a subject experiences is stored with its time and an **importance** score from 1 to 10, rated by the model in small batches.
+- **Retrieval:** each turn, besides the last 12 events, up to 8 older memories are pulled into the prompt, ranked by **recency + importance + relevance** to the current moment (each normalised, as in the paper). Relevance uses embeddings when available, otherwise word overlap:
+  - OpenAI: `text-embedding-3-small`, which is very cheap.
+  - Ollama: any installed embedding model, for example `ollama pull nomic-embed-text`.
+- **Reflection when it matters:** when enough importance has accumulated, the subject is asked what high-level insights it can infer from its recent memories. The 1–3 insights are stored as memories (importance 8) and shown in the log.
+- **Interviews:** in the Inspector (**I** → **Interview**) you can ask the followed subject anything. It answers from its own memories, and the question and answer are **not** stored in its memory, so the experiment is unaffected. Interviews are included in the export.
+- **Inspector → Memory** shows the whole stream with importance scores, the summary, and which older memories were retrieved into the last prompt.
 
 ## Choosing a model
 
@@ -187,7 +208,8 @@ Dev shortcut to skip the setup: `http://localhost:5173/?auto=free:2:off&provider
 index.html          SEO meta, Content-Security-Policy, structured data
 public/             favicons (SVG + PNG + Apple touch icon), robots.txt, sitemap.xml, web manifest
 src/main.js         experiment loop, camera, keys, hearing, deaths
-src/brain.js        providers (Ollama/OpenAI), request queue, prompts, memory, wish reader
+src/brain.js        providers (Ollama/OpenAI), request queue, prompts, wish reader, retrieval, insights, interviews
+src/memory.js       memory stream: importance, recency/importance/relevance retrieval, embeddings
 src/character.js    body, animation, actions, free-will acting, steering
 src/needs.js        hunger / tiredness / hidden health
 src/people.js       the two subjects (looks, personality)

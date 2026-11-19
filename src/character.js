@@ -194,6 +194,11 @@ export class Character {
         this.state = 'walk'; this.actionText = 'wandering';
         return;
       }
+    } else if (plan.kind === 'already') {
+      this.placeLabel = '';
+      this.onEvent(`You are already at ${plan.label}.`);
+      this.begin('wait', 3, 'at ' + plan.label);
+      return;
     } else if (plan.kind === 'sit') {
       this.begin('sit', 8, 'sitting');
       return;
@@ -211,7 +216,7 @@ export class Character {
     return null;
   }
 
-  // Stop what you're doing (the Player spoke / someone died) so the brain decides again soon.
+  // Stop what you're doing (the experimenter spoke / someone died) so the brain decides again soon.
   interrupt() {
     if (this.state === 'walk') { this.onEvent('You stopped walking.'); this.endAction(); }
     else if (this.state !== 'idle' && this.state !== 'dead') this.timer = Math.min(this.timer, 0.2);

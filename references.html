@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'none';" />
+  <title>References — BodiedGPT</title>
+  <meta name="description" content="The research behind BodiedGPT: Generative Agents, ReAct, Reflexion, Voyager, MemGPT and Project Sid, and which ideas BodiedGPT uses from each." />
+  <link rel="canonical" href="https://bodiedgpt.vercel.app/references.html" />
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="BodiedGPT — references" />
+  <meta property="og:description" content="The papers behind BodiedGPT and what it borrows from each." />
+  <meta property="og:url" content="https://bodiedgpt.vercel.app/references.html" />
+  <meta property="og:image" content="https://bodiedgpt.vercel.app/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="theme-color" content="#0c0c0e" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/src/article.css" />
+</head>
+<body>
+  <header class="top"><div class="top-inner">
+    <a class="wordmark" href="/"><i>Bodied</i>GPT</a>
+    <nav><a href="/how-it-works.html">How it works</a><a href="/results.html">Results</a><a href="/references.html" aria-current="page">References</a></nav>
+  </div></header>
+
+  <main>
+    <p class="kicker">References</p>
+    <h1>The research behind it</h1>
+    <p class="lede">BodiedGPT builds on published work about language-model agents. Here is each paper, what it found, and what BodiedGPT takes from it.</p>
+
+    <h2>Most important</h2>
+    <div class="ref">
+      <div class="title"><a href="https://arxiv.org/abs/2304.03442" rel="noopener">Generative Agents: Interactive Simulacra of Human Behavior</a></div>
+      <div class="meta">Joon Sung Park, Joseph C. O'Brien, Carrie J. Cai, Meredith Ringel Morris, Percy Liang, Michael S. Bernstein · 2023 · arXiv:2304.03442</div>
+      <p class="why">25 language-model agents live in a small town called "Smallville". They remember, reflect and plan, and believable social behaviour emerges, such as news and invitations spreading from one agent to another. <strong>Used in BodiedGPT:</strong> the memory stream, importance scores, retrieval by recency + importance + relevance, reflection triggered by accumulated importance, and interviewing agents without affecting them.</p>
+    </div>
+
+    <h2>Agents that think and act</h2>
+    <div class="ref">
+      <div class="title"><a href="https://arxiv.org/abs/2210.03629" rel="noopener">ReAct: Synergizing Reasoning and Acting in Language Models</a></div>
+      <div class="meta">Shunyu Yao, Jeffrey Zhao, Dian Yu, et al. · 2022 · arXiv:2210.03629</div>
+      <p class="why">Interleaving written reasoning with actions makes language-model agents more capable and easier to understand. <strong>Used in BodiedGPT:</strong> every decision pairs a "thought" with an action or intention, and both are shown in the observation log.</p>
+    </div>
+    <div class="ref">
+      <div class="title"><a href="https://arxiv.org/abs/2303.11366" rel="noopener">Reflexion: Language Agents with Verbal Reinforcement Learning</a></div>
+      <div class="meta">Noah Shinn, Federico Cassano, Edward Berman, et al. · 2023 · arXiv:2303.11366</div>
+      <p class="why">Agents improve by reflecting in words on what happened and keeping those reflections in memory. <strong>Used in BodiedGPT:</strong> clear feedback on what actually happened after each wish, and stored insights. These were what broke the loops small models get stuck in.</p>
+    </div>
+
+    <h2>Embodiment and memory</h2>
+    <div class="ref">
+      <div class="title"><a href="https://arxiv.org/abs/2305.16291" rel="noopener">Voyager: An Open-Ended Embodied Agent with Large Language Models</a></div>
+      <div class="meta">Guanzhi Wang, Yuqi Xie, Yunfan Jiang, et al. · 2023 · arXiv:2305.16291</div>
+      <p class="why">A language model plays Minecraft open-endedly, exploring and learning skills with no fixed goal. <strong>Relevant to BodiedGPT:</strong> the same question of what an agent does with an open world and no instructions, here with a human body and a much simpler world.</p>
+    </div>
+    <div class="ref">
+      <div class="title"><a href="https://arxiv.org/abs/2310.08560" rel="noopener">MemGPT: Towards LLMs as Operating Systems</a></div>
+      <div class="meta">Charles Packer, Sarah Wooders, Kevin Lin, et al. · 2023 · arXiv:2310.08560</div>
+      <p class="why">Managing an agent's limited context like an operating system manages memory: a small working memory plus a larger store it can pull from. <strong>Used in BodiedGPT:</strong> the split between a short window of recent events, a running summary, and older memories retrieved on demand.</p>
+    </div>
+
+    <h2>Many agents</h2>
+    <div class="ref">
+      <div class="title"><a href="https://arxiv.org/abs/2411.00114" rel="noopener">Project Sid: Many-agent simulations toward AI civilization</a></div>
+      <div class="meta">Altera.AL et al. · 2024 · arXiv:2411.00114</div>
+      <p class="why">Large numbers of language-model agents in Minecraft form roles, rules and culture. <strong>Relevant to BodiedGPT:</strong> a direction for the future, scaling from two subjects to small societies.</p>
+    </div>
+
+    <h2>Tools</h2>
+    <ul>
+      <li><a href="https://ollama.com" rel="noopener">Ollama</a>: runs open models locally, with structured (JSON schema) output.</li>
+      <li><a href="https://platform.openai.com/docs" rel="noopener">OpenAI API</a>: cloud models, structured outputs and embeddings (<code>text-embedding-3-small</code>).</li>
+      <li><a href="https://threejs.org" rel="noopener">Three.js</a>: the 3D island in the browser.</li>
+    </ul>
+
+    <a class="cta" href="/">Run an experiment</a>
+  </main>
+  <footer class="site">BodiedGPT · runs in your browser · <a href="https://github.com/naodt1/bodiedGPT" rel="noopener">source on GitHub</a></footer>
+</body>
+</html>

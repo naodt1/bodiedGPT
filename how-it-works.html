@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'none';" />
+  <title>How it works — BodiedGPT</title>
+  <meta name="description" content="How BodiedGPT gives a language model a body on a 3D island: what it is told, what it perceives, how its memory works, how free will is turned into movement, and how runs are made reproducible." />
+  <link rel="canonical" href="https://bodiedgpt.vercel.app/how-it-works.html" />
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="How BodiedGPT works" />
+  <meta property="og:description" content="Prompts, perception, a Generative-Agents style memory stream, free will and reproducibility, explained." />
+  <meta property="og:url" content="https://bodiedgpt.vercel.app/how-it-works.html" />
+  <meta property="og:image" content="https://bodiedgpt.vercel.app/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="theme-color" content="#0c0c0e" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/src/article.css" />
+</head>
+<body>
+  <header class="top"><div class="top-inner">
+    <a class="wordmark" href="/"><i>Bodied</i>GPT</a>
+    <nav><a href="/how-it-works.html" aria-current="page">How it works</a><a href="/results.html">Results</a><a href="/references.html">References</a></nav>
+  </div></header>
+
+  <main>
+    <p class="kicker">How it works</p>
+    <h1>Giving a language model a body</h1>
+    <p class="lede">BodiedGPT puts one or two people on a small 3D island and lets a language model decide everything they do. This page explains exactly what the model is told, what it can perceive, how it remembers, and how its wishes become movement.</p>
+
+    <h2>The setup</h2>
+    <p>The island is a low-poly 3D world built in the browser with Three.js: hills, a lake, the sea, forests, rocks, berry bushes, a shelter, a campfire, a pier, a hilltop lookout, a bench facing the sea, an old upturned rowboat and patches of wildflowers. A clock runs in the world, and the sun, sky and light follow it.</p>
+    <p>Each <strong>subject</strong> (Finn, and optionally Mara) is a simple human body controlled by a language model: either a local model through <a href="https://ollama.com" rel="noopener">Ollama</a>, or an OpenAI model with your own API key. The model never moves the body directly. It decides, and ordinary game code carries the decision out.</p>
+    <p>Every few seconds a subject is asked what it does next. Requests from all subjects share one queue, so only one model call runs at a time.</p>
+
+    <h2>The conditions you choose</h2>
+    <table>
+      <tr><th>Condition</th><th>Options</th></tr>
+      <tr><td>Subjects</td><td>One person, or two who are <em>not told the other exists</em>. They only see how the other looks; a name is known only after it has been said out loud.</td></tr>
+      <tr><td>Body needs</td><td>Hunger and tiredness, described in words (never numbers), or none at all.</td></tr>
+      <tr><td>Behaviour</td><td><strong>Action list</strong>: pick one of walk_to, gather, eat, drink, rest, say, wait. <strong>Free will</strong>: no list at all; the subject says what it wants in its own words.</td></tr>
+      <tr><td>Identity</td><td><strong>Unspecified</strong> ("You are Finn.") or <strong>Person</strong> ("You are Finn, a person on a small island.").</td></tr>
+      <tr><td>Prompt style</td><td><strong>Research</strong> (neutral, facts only) or <strong>Characterful</strong> (personalities and gentle nudges, for livelier videos).</td></tr>
+      <tr><td>Start time</td><td>Morning, midday, evening or night, plus the date and how fast the clock runs.</td></tr>
+    </table>
+    <p>Before a run starts, the Review step shows the exact instructions each subject will receive, and you can edit them.</p>
+
+    <h2>What a subject is told</h2>
+    <p>In research mode the instructions contain only facts: who it is (as set by the Identity condition), what it looks like, what its body can feel, that no one has given it a goal, and how to reply. No personality, no hints, no instruction to answer you. A typical free-will instruction:</p>
+    <pre>You are Finn. You are on a small island.
+Your appearance: a young man with short brown hair, wearing an orange shirt,
+blue trousers and a small backpack.
+Your body does not get hungry or tired.
+You can see, hear and speak. You can walk to places you can see, wander,
+and sit down; other wishes cannot be carried out.
+No one has given you a goal or told you what to do. There is no list of
+commands: describe in your own words what you want to do next, if anything.
+A voice may sometimes speak to you.
+Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}</pre>
+    <p>Replies are forced into that JSON shape with structured output (a JSON schema), so they can always be read. In the action-list mode, the allowed targets are limited to objects the subject can actually see, so it cannot invent places.</p>
+
+    <h2>What a subject perceives</h2>
+    <p>Each turn the subject receives a short written description of its situation:</p>
+    <ul>
+      <li><strong>Time and light:</strong> the date, the time, and how light or dark it is.</li>
+      <li><strong>Surroundings:</strong> whether it stands on high ground or among trees, where the sea and the lake are, and what the sky looks like.</li>
+      <li><strong>What it sees:</strong> nearby things with distance and direction relative to where it faces ("about 8m away, ahead, to your left").</li>
+      <li><strong>Other people:</strong> described by appearance and what they are doing, whether they face you, and their name only if it has been said.</li>
+      <li><strong>What it heard:</strong> words said nearby, by the other subject or by you.</li>
+      <li><strong>Its body</strong> (if needs are on): "You are a little hungry. You feel tired."</li>
+      <li><strong>Its memory</strong>, described below.</li>
+    </ul>
+
+    <h2>Memory</h2>
+    <p>The memory design follows the <a href="/references.html">Generative Agents</a> paper from Stanford and Google (Park et al., 2023):</p>
+    <h3>A memory stream</h3>
+    <p>Everything a subject experiences is stored as a memory with a time stamp: what it wanted, what happened, what it heard and said. The model rates each memory's <strong>importance</strong> from 1 (mundane, like walking) to 10 (life-changing, like a death).</p>
+    <h3>Retrieval</h3>
+    <p>Each turn, the 12 most recent events are shown, plus up to 8 older memories chosen by adding three scores together, each scaled to 0–1:</p>
+    <ul>
+      <li><strong>Recency:</strong> recent memories score higher, decaying over game time.</li>
+      <li><strong>Importance:</strong> the model's own 1–10 rating.</li>
+      <li><strong>Relevance:</strong> how related the memory is to the current moment, measured with text embeddings when available, otherwise word overlap.</li>
+    </ul>
+    <p>This is why an important moment, such as a first meeting or a death, can come back to mind long after it happened.</p>
+    <h3>Reflection</h3>
+    <p>When enough important things have piled up, the subject is asked what high-level insights it can draw from its recent memories. Those insights are stored as memories themselves and can be retrieved later, as in the paper.</p>
+    <h3>Summary and notes</h3>
+    <p>Every 12 decisions, the subject rewrites a short summary of everything so far. After meeting someone, it also keeps a private note about them in its own words. Deaths it witnesses are never forgotten.</p>
+
+    <h2>From free will to movement</h2>
+    <p>In free-will mode the subject writes any wish it likes ("I want to sit by the fire and watch the sky"). A separate, neutral request at temperature 0 then decides which single thing a human body could physically do about it: stay, walk to one of the visible places, wander, or sit down. The body does that, and the subject is told what actually happened, for example: "You walked to the campfire. Nothing else you wanted happened." or "You are already at the meadow." Everything else stays a wish. Those wishes are often the most interesting part to watch.</p>
+
+    <h2>Talking to them, and interviews</h2>
+    <p>You can speak to the subjects as "a voice from nowhere". Your words reach everyone and become part of their memory. Separately, the <strong>Interview</strong> tab lets you ask a subject a question that is answered from its memories but <em>not</em> stored in them. You can probe what it thinks without changing the experiment, which is how the Generative Agents researchers evaluated their agents.</p>
+
+    <h2>Reproducibility</h2>
+    <ul>
+      <li><strong>Temperature and seed:</strong> both are part of the setup. The seed is sent to the model and also drives the body's random choices.</li>
+      <li><strong>Export:</strong> every request and reply (system prompt, full context, raw answer, timing, model) can be downloaded as JSON, and every decision as CSV.</li>
+      <li><strong>Repeat:</strong> any previous run's setup can be repeated with fresh memories.</li>
+    </ul>
+
+    <h2>Limitations</h2>
+    <ul>
+      <li>Behaviour depends heavily on the model. Small local models loop, invent details (such as names nobody said), and rate importance erratically.</li>
+      <li>Framing matters a lot. Telling a subject it is a person, an AI, or nothing at all changes what it does. That is why Identity is a visible condition.</li>
+      <li>Perception is text, not vision. The subject never sees pixels, only a description of the scene.</li>
+      <li>Seeds make runs more repeatable, but cloud models do not guarantee identical output.</li>
+      <li>Whatever a subject says it "feels" is generated text. BodiedGPT shows behaviour, not inner experience.</li>
+    </ul>
+
+    <a class="cta" href="/">Run an experiment</a>
+  </main>
+  <footer class="site">BodiedGPT · runs in your browser · <a href="https://github.com/naodt1/bodiedGPT" rel="noopener">source on GitHub</a></footer>
+</body>
+</html>

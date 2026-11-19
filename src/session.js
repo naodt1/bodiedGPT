@@ -13,6 +13,8 @@ export const Session = {
   research: true,       // neutral prompts: no personality, no hints, no forced replies
   identity: 'unspecified',   // what the subject is told it is: 'unspecified' | 'person'
   customPrompts: [],         // per subject: edited instructions ('' = default)
+  relation: '',              // '' = strangers, 'married' = the two subjects are a married couple (scenario)
+  scenario: '',              // which template scenario was used, if any
   temperature: 0.7,     // sampling temperature for decisions
   seed: Math.floor(Math.random() * 1e6),   // passed to the model + used for the body's random choices
   clockMs: 0,           // in-world date/time (ms since epoch, local time)

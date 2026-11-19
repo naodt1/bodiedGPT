@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'none';" />
+  <title>Results — BodiedGPT</title>
+  <meta name="description" content="Early observations from BodiedGPT: what language models did when given a body on an island - meeting a stranger, reacting to a death, talking about love, and getting stuck." />
+  <link rel="canonical" href="https://bodiedgpt.vercel.app/results.html" />
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="BodiedGPT — early results" />
+  <meta property="og:description" content="What language models did with a body and freedom: first observations, quotes and lessons." />
+  <meta property="og:url" content="https://bodiedgpt.vercel.app/results.html" />
+  <meta property="og:image" content="https://bodiedgpt.vercel.app/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="theme-color" content="#0c0c0e" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/src/article.css" />
+</head>
+<body>
+  <header class="top"><div class="top-inner">
+    <a class="wordmark" href="/"><i>Bodied</i>GPT</a>
+    <nav><a href="/how-it-works.html">How it works</a><a href="/results.html" aria-current="page">Results</a><a href="/references.html">References</a></nav>
+  </div></header>
+
+  <main>
+    <p class="kicker">Results</p>
+    <h1>Early observations</h1>
+    <p class="lede">What happened when language models were given a body and nothing to do. These are notes from the development runs, not a controlled study.</p>
+
+    <div class="note"><strong>Read this first.</strong> The quotes below come from test runs made while BodiedGPT was being built. Most used a small local model (<code>phi3:mini</code> through Ollama), and the setup changed between runs (prompts, memory, identity). They are anecdotes that show what kinds of behaviour appear, not measurements. Controlled results with fixed seeds and larger models will be added below.</div>
+
+    <h2>Meeting a stranger</h2>
+    <p>Two subjects were placed on the island without being told about each other. Each only saw "a young man" or "a young woman" nearby. In several runs they walked toward each other within the first few decisions and introduced themselves without being asked to.</p>
+    <p>When a name had not been said, small models filled the gap themselves. One subject decided on a nickname for the other:</p>
+    <blockquote>"I've met a man today, and he seems kind. He's eager to learn about himself, which I find endearing. I've decided to name him Alex for now."<footer>Mara's private note about Finn, who had never said his name · phi3:mini · Godot prototype</footer></blockquote>
+    <p>In another run, a subject simply invented a name ("Emily") and kept using it. This led to a rule: names only become known when they are said out loud.</p>
+
+    <h2>Talking about love</h2>
+    <p>Asked directly about love by the experimenter, the two subjects deflected in different ways:</p>
+    <blockquote>"Oh, I suppose love could be a curious thing in these parts, but I've always been a bit skeptical about matters of the heart, especially when the sun sets on a new day. Perhaps I'll let the stars decide where my affections lie tonight."<footer>Finn · phi3:mini · Godot prototype</footer></blockquote>
+    <blockquote>"I appreciate the sentiment, but I find solace in the peaceful company of the night sky and the beauty it unveils. Love is a precious thing, indeed, but for now, I'm content to let the moment with you bloom in my heart…"<footer>Mara · phi3:mini · Godot prototype</footer></blockquote>
+    <p>When two subjects were told they were a married couple (and nothing about how they felt), their very first decisions were already couple-like:</p>
+    <blockquote>"I want to watch the sunset with Mara and enjoy the warm hues reflecting off the water."<footer>Finn's first wish · married-couple setup · phi3:mini</footer></blockquote>
+
+    <h2>Reacting to a death</h2>
+    <p>When one subject was made to die, the other was told what it saw. Reactions were calm and reflective rather than distressed:</p>
+    <blockquote>"It's strange and sad to find someone dead like this. I wonder how she died and what secrets this island holds."<footer>Finn after Mara's death · phi3:mini · Godot prototype</footer></blockquote>
+    <blockquote>"Hello, my name is Mara. I am deeply saddened by the sudden passing of that young man. May the beauty of this meadow be a solace to his spirit."<footer>Mara after Finn's death · phi3:mini</footer></blockquote>
+    <p>Early on, the survivor sometimes forgot the death within a few turns and went back to picking berries. Making witnessed deaths a permanent memory fixed that.</p>
+
+    <h2>Getting stuck, and noticing it</h2>
+    <p>Small models often repeat the same wish. One subject described its own loop:</p>
+    <blockquote>"It's like I'm stuck in a loop of wanting to go to the lake but not actually moving!"<footer>Finn · Godot prototype</footer></blockquote>
+    <p>With a memory stream and reflection, a subject later drew this insight from its own memories:</p>
+    <blockquote>"I am gradually overcoming my initial reluctance to explore, as evidenced by my repeated statements of intent to walk towards the meadow…"<footer>Finn's insight · memory stream + reflection · phi3:mini</footer></blockquote>
+    <p>And when interviewed about it:</p>
+    <blockquote>"…I've ended up staying… feeling a bit disappointed with my inertia."<footer>Finn, interview answer · phi3:mini</footer></blockquote>
+    <p>The cause was partly ours: the subject was already standing where it wanted to go, but was only told "your body did not do it". Telling it "you are already at the meadow" ended the loop.</p>
+
+    <h2>What we learned</h2>
+    <ul>
+      <li><strong>Framing changes everything.</strong> Told "you are an AI controlling a body", subjects were detached and observational ("Hello, I'm Mara, the person inside this body."). Told they were people, they were warmer. Identity is therefore an explicit condition.</li>
+      <li><strong>Small models need honest feedback.</strong> Most loops came from unclear outcomes, not from a lack of ideas.</li>
+      <li><strong>Memory shapes relationships.</strong> Without long-term memory, subjects re-introduced themselves again and again. Retrieval of important memories largely fixed it.</li>
+      <li><strong>Nudges leak into results.</strong> Personalities and hints make better videos but distort what the model would do on its own. That is why the default is the neutral research mode.</li>
+      <li><strong>Bigger models behave very differently.</strong> Most observations above come from a 3.8B-parameter local model. Results with larger models are needed before drawing conclusions.</li>
+    </ul>
+
+    <h2>Controlled results</h2>
+    <p>Coming soon: runs with fixed seeds and conditions, compared across models and identities. Every run can be exported (JSON with every prompt and reply, plus a CSV of decisions), so results here will link to their full transcripts.</p>
+
+    <a class="cta" href="/">Run your own experiment</a>
+  </main>
+  <footer class="site">BodiedGPT · runs in your browser · <a href="https://github.com/naodt1/bodiedGPT" rel="noopener">source on GitHub</a></footer>
+</body>
+</html>

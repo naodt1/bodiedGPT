@@ -22,8 +22,23 @@ const P = {
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/>',
   repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
   flask: '<path d="M9 3h6M10 3v6L4.5 19a1.5 1.5 0 0 0 1.3 2h12.4a1.5 1.5 0 0 0 1.3-2L14 9V3"/><path d="M7 15h10"/>',
+  compass: '<circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/>',
+  thermometer: '<path d="M14 14.8V4a2 2 0 0 0-4 0v10.8a4 4 0 1 0 4 0z"/>',
+  layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
 };
+
+// Solid (filled) glyphs, used where a heavier icon reads better.
+const F = {
+  doc: '<path d="M6 2h8.2a1 1 0 0 1 .7.3l4.8 4.8a1 1 0 0 1 .3.7V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M8 13h8M8 17h5" stroke="#0e0e10" stroke-width="1.8" stroke-linecap="round"/>',
+  sparkles: '<path d="M11 3l2.2 6.1L19.3 11l-6.1 2.2L11 19.3l-2.2-6.1L2.7 11l6.1-1.9z"/><path d="M19 1.5l.9 2.1 2.1.9-2.1.9L19 7.5l-.9-2.1L16 4.5l2.1-.9z"/>',
+  chart: '<rect x="3" y="12" width="4.5" height="9" rx="1"/><rect x="9.75" y="7" width="4.5" height="14" rx="1"/><rect x="16.5" y="3" width="4.5" height="18" rx="1"/>',
+  book: '<path d="M5 3.5A2.5 2.5 0 0 1 7.5 1H20a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H7.5a1.5 1.5 0 0 0 0 3H20a1 1 0 1 1 0 2H7.5A3.5 3.5 0 0 1 4 19.5v-16z"/>',
+};
+
+export function iconFilled(name, size = 16) {
+  return `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${F[name] || ''}</svg>`;
+}
 
 export function icon(name, size = 16) {
   return `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || ''}</svg>`;

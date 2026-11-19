@@ -16,7 +16,7 @@ import { saveRun, applyWorld } from './save.js';
 import { fmtTime } from './session.js';
 import { PEOPLE } from './people.js';
 
-inject();
+if (import.meta.env.PROD) inject();   // Vercel Analytics: production only (its dev debug script is blocked by our CSP)
 
 const HEARING_RANGE = 25;
 const AUTOSAVE_MS = 30000;
@@ -138,6 +138,16 @@ class Game {
   startExperiment() {
     this.sky.update(this.camTarget, true);
     for (let i = 0; i < Session.people; i++) this.spawnPerson(PEOPLE[i], i);
+    // Married-couple scenario: they already know each other's names and have a short note
+    // about their partner (facts only; how they feel is left to them).
+    if (Session.relation === 'married' && this.characters.length === 2) {
+      this.characters.forEach((c, i) => {
+        const other = this.characters[1 - i], b = this.brains[i];
+        b.knownNames[other.id] = other.charName;
+        b.introducedTo[other.id] = true;
+        b.impressions[other.id] = `${other.charName} is my ${other.gender === 'woman' ? 'wife' : 'husband'}. We have been together for five years.`;
+      });
+    }
     for (let i = 0; i < this.characters.length; i++) {
       const c = this.characters[i];
       c.onSpoke = (text) => this.onSpoke(c, text);
@@ -147,6 +157,12 @@ class Game {
     this.hud = new Hud(this.ui, this);
     for (const b of this.brains) {
       b.onDecision = (e) => this.hud.add(e);
+      b.onInsight = (text) => this.hud.add({ insight: text, who: b.charName, time: fmtTime(b.character.survivalTime) });
+      b.onInterview = (r) => {
+        b.interviews = b.interviews || [];
+        const pending = b.interviews.find((x) => x.a == null && x.q === r.q);
+        if (pending) Object.assign(pending, r); else b.interviews.push(r);
+      };
       b.onImpression = (aboutId, note) => {
         const p = this.world.getObj(aboutId);
         this.hud.add({ feeling: note, who: b.charName, about: p ? p.charName : aboutId, time: fmtTime(b.character.survivalTime) });
@@ -238,7 +254,7 @@ class Game {
       experiment: Session.saveName, exportedAt: new Date().toISOString(),
       behaviour: Session.mode === 'free' ? 'free will' : 'action list', subjects: Session.people,
       bodyNeeds: Session.needs, allowDeath: Session.death, promptStyle: Session.research ? 'research (neutral)' : 'characterful',
-      identity: Session.identity,
+      identity: Session.identity, scenario: Session.scenario || null, relation: Session.relation || 'strangers',
       customInstructions: Session.customPrompts.map((p, i) => (p ? { subject: this.brains[i]?.charName, instructions: p } : null)).filter(Boolean),
       temperature: Session.temperature, seed: Session.seed, worldStart: this.startClock, worldNow: Session.dateTimeText(),
       clockRate: Session.clockRate,
@@ -247,6 +263,7 @@ class Game {
       name: b.charName, id: this.characters[i].id, looks: this.characters[i].looks, model: b.currentModel(),
       personality: Session.research ? null : b.personality, decisions: b.decisionCount, alive: this.characters[i].state !== 'dead',
       summary: b.summary, notes: b.impressions, knownNames: b.knownNames, deaths: b.deaths,
+      memoryStream: b.mem.toJSON(), interviews: b.interviews || [],
     }));
     const transcript = this.brains.flatMap((b) => b.transcript);
     const data = { config, subjects, transcript, log: this.hud.entries };
@@ -255,7 +272,7 @@ class Game {
     const rows = [['game_time', 'subject', 'type', 'action_or_wish', 'target', 'thought', 'said']];
     for (const e of this.hud.entries) {
       if (e.system) rows.push(['', '', 'note', e.system, '', '', '']);
-      else if (e.player) rows.push([e.time, 'PLAYER', 'message', '', e.to, '', e.player]);
+      else if (e.player) rows.push([e.time, 'EXPERIMENTER', 'message', '', e.to, '', e.player]);
       else if (e.feeling) rows.push([e.time, e.who, 'note_about_' + e.about, '', '', e.feeling, '']);
       else rows.push([e.time, e.who, e.error ? 'error' : 'decision', e.action === 'intend' ? e.intention : e.action, e.target || '', e.thought || '', e.say || '']);
     }
@@ -291,7 +308,7 @@ class Game {
         const t = this.focused();
         if (t.state === 'dead') break;
         if (this.killArmed && performance.now() - this.killArmed < 3000) { this.killArmed = 0; this.killPerson(t); }
-        else { this.killArmed = performance.now(); this.hud.system(`Press K again within 3 seconds to make ${t.charName} die.`); }
+        else { this.killArmed = performance.now(); this.hud.system(`Press K again within 3 seconds to end ${t.charName} (intervention).`); }
         break;
       }
     }
@@ -334,4 +351,5 @@ function download(name, text, type) {
 }
 const csv = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
 
-new Game();
+const game = new Game();
+if (import.meta.env.DEV) window.__game = game;   // dev-only handle for debugging

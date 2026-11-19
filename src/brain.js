@@ -3,9 +3,11 @@
 //  * Structured JSON output; every reply is validated; errors/timeouts fall back to wait().
 //  * Memory: rolling events, reflections, private feelings notes about other people,
 //    names learned only when said out loud, deaths never forgotten.
-//  * Player chat gets a dedicated "answer the Player" request, so replies are guaranteed.
+//  * Experimenter messages get a dedicated "answer the Voice" request, so replies are guaranteed.
 import { Session, fmtTime } from './session.js';
 import { flatDist } from './rng.js';
+import { MemoryStream } from './memory.js';
+const INSIGHT_THRESHOLD = 40;   // reflect once this much importance has piled up (paper: 150 over a full day)
 
 const ACTIONS = ['walk_to', 'gather', 'eat', 'drink', 'rest', 'say', 'wait'];
 const OPENAI_CHEAP = ['gpt-4.1-nano', 'gpt-4o-mini', 'gpt-4.1-mini', 'gpt-5-nano', 'gpt-5-mini'];
@@ -77,7 +79,7 @@ export async function listModels(provider) {
     const r = await fetch(Provider.ollama('/api/tags'), { signal: ctrl.signal });
     if (!r.ok) throw new Error('HTTP ' + r.status);   // 403 = this site's origin isn't allowed by OLLAMA_ORIGINS
     const j = await r.json();
-    const models = (j.models || []).map((m) => m.name);
+    const models = (j.models || []).map((m) => m.name).filter((n) => !/embed/.test(n));
     if (!models.length) return { ok: false, models, error: 'Ollama is running but has no models. Try: ollama pull llama3.2:3b' };
     return { ok: true, models, suggested: pickLocal(models) };
   } catch {
@@ -136,6 +138,12 @@ export class Brain {
     this.visibleIds = [];
     this.lastByKind = {};
     this.transcript = [];   // EVERY request/response (for export)
+    this.mem = new MemoryStream();   // Generative-Agents style memory stream
+    this.retrieved = [];             // memories pulled into the current prompt
+    this.importanceSinceInsight = 0;
+    this.embedModel = '';            // embedding model if available ('' = word-overlap relevance)
+    this.interviewQ = [];
+    this.onInterview = () => {}; this.onInsight = () => {};
     this.summary = '';      // running summary of everything that happened (long-term memory)   // kind -> {system, user, reply, model, at} : what was really sent (for the Inspector)
     // callbacks for the UI
     this.onDecision = () => {}; this.onStatus = () => {}; this.onModels = () => {}; this.onImpression = () => {};
@@ -178,6 +186,14 @@ export class Brain {
     const t = this.character ? this.character.survivalTime : 0;
     this.events.push(`[${fmtTime(t)}] ${text}`);
     if (this.events.length > 60) this.events.shift();
+    this.mem.add(text, t, 'event');
+    if (this.mem.unscored().length >= 6) enqueue(this, 'score');
+  }
+
+  // Ask a subject a question without it entering their memory (Generative Agents' "interviews").
+  interview(question) {
+    this.interviewQ.push(question.trim().slice(0, 400));
+    enqueue(this, 'interview', true);
   }
 
   async requestDecision() {
@@ -189,12 +205,12 @@ export class Brain {
     enqueue(this, 'decision');
   }
 
-  // The Player typed something: guaranteed answer via its own request, at the front.
+  // The experimenter typed something: guaranteed answer via its own request, at the front.
   playerMessage(text) {
     text = text.trim().slice(0, 300);
     if (!text || !this.enabled) return;
     this.playerMsgs.push(text);
-    this.addEvent(`The Player (a voice from nowhere) said to you: "${text}"`);
+    this.addEvent(`The Voice (a voice from nowhere) said to you: "${text}"`);
     this.character?.interrupt();
     if (!Session.research) {   // characterful mode: a dedicated request guarantees an answer
       this.replyMsgs.push(text);
@@ -232,7 +248,22 @@ export class Brain {
           console.log('[Brain] model loaded', this.model);
         } catch (e) { this.setStatus('Model load failed: ' + e.message); }
         return;
-      case 'decision': this.setStatus('Thinking...'); payload = this.decisionBody(); break;
+      case 'decision': this.setStatus('Thinking...'); await this.prepareRetrieval(); payload = this.decisionBody(); break;
+      case 'score': {
+        this.scoreBatch = this.mem.unscored(8);
+        if (!this.scoreBatch.length) return;
+        payload = this.scoreBody(this.scoreBatch);
+        break;
+      }
+      case 'insight': this.setStatus('Reflecting...'); payload = this.insightBody(); break;
+      case 'interview': {
+        if (!this.interviewQ.length) return;
+        this.currentQ = this.interviewQ.shift();
+        this.setStatus('Being interviewed...');
+        await this.prepareRetrieval(this.currentQ);
+        payload = this.interviewBody(this.currentQ);
+        break;
+      }
       case 'reflect': this.setStatus('Reflecting...'); payload = this.reflectionBody(); break;
       case 'summarize': this.setStatus('Remembering...'); payload = this.summaryBody(); break;
       case 'reply':
@@ -264,6 +295,7 @@ export class Brain {
       this.logTranscript(kind, payload, 'ERROR: ' + e.message, t0);
       console.warn(`[Brain:${this.charName}] ${kind} failed:`, e.message);
       if (kind === 'decision') this.decisionFailed(e.message);
+      else if (kind === 'interview') this.onInterview({ q: this.currentQ, a: 'Could not answer: ' + e.message, at: fmtTime(this.character?.survivalTime || 0) });
       else if (kind === 'impression') this.contact[this.impAbout] = true;
       this.setStatus(e.message.slice(0, 80));
       return;
@@ -271,6 +303,31 @@ export class Brain {
     const j = parseJson(content);
     switch (kind) {
       case 'decision': await this.handleDecision(j, content); break;
+      case 'score': {
+        const scores = Array.isArray(j?.scores) ? j.scores : [];
+        this.scoreBatch.forEach((m, i) => {
+          const v = Math.round(Number(scores[i]));
+          if (v >= 1 && v <= 10) m.importance = v;
+          m.scored = true;
+          this.importanceSinceInsight += m.importance;
+        });
+        if (this.importanceSinceInsight >= INSIGHT_THRESHOLD) { this.importanceSinceInsight = 0; enqueue(this, 'insight'); }
+        await this.embedPending();
+        break;
+      }
+      case 'insight': {
+        const list = (Array.isArray(j?.insights) ? j.insights : []).map((x) => String(x).trim()).filter(Boolean).slice(0, 3);
+        for (const text of list) {
+          this.mem.add(text, this.character.survivalTime, 'insight', 8);
+          this.onInsight(text);
+        }
+        await this.embedPending();
+        break;
+      }
+      case 'interview':
+        // Shown to you only - NOT added to the subject's memory, so the run is unaffected.
+        this.onInterview({ q: this.currentQ, a: String(j?.answer || content).trim(), at: fmtTime(this.character.survivalTime) });
+        break;
       case 'summarize':
         if (j?.summary?.trim()) this.summary = j.summary.trim().slice(0, 1200);
         break;
@@ -285,7 +342,7 @@ export class Brain {
         if (j?.reply?.trim()) {
           const ans = j.reply.trim();
           this.character.showSay(ans);
-          this.addEvent(`You answered the Player: "${ans}"`);
+          this.addEvent(`You answered the Voice: "${ans}"`);
           this.playerMsgs = this.playerMsgs.filter((m) => m !== this.replyTo);
           this.onDecision({ who: this.charName, time: fmtTime(this.character.survivalTime), thought: '(answering you)',
             action: 'say', target: '', say: ans, ok: true, error: '' });
@@ -362,7 +419,9 @@ export class Brain {
         if (!this.openaiModel || !this.availableModels.includes(this.openaiModel)) this.openaiModel = pickCheapest(this.availableModels);
       } else {
         const j = await this.http(Provider.ollama('/api/tags'), null, 5, {}, 'GET');
-        this.availableModels = (j.models || []).map((m) => m.name);
+        const all = (j.models || []).map((m) => m.name);
+        this.embedModel = all.find((n) => /embed/.test(n)) || '';
+        this.availableModels = all.filter((n) => !/embed/.test(n));
         if (this.availableModels.length && !this.availableModels.includes(this.model)) this.model = pickLocal(this.availableModels);
       }
       this.onModels(this.availableModels);
@@ -449,7 +508,7 @@ export class Brain {
       enqueue(this, 'impression');
     }
     if (this.decisionCount % 12 === 0) enqueue(this, 'summarize');            // long-term memory
-    if (!Session.research && this.decisionCount % 10 === 0) enqueue(this, 'reflect');   // reflections only in characterful mode
+    // (reflections now come from the memory stream: see 'insight', triggered by importance)
   }
 
   decisionFailed(msg) {
@@ -498,10 +557,17 @@ export class Brain {
       if (j?.action === 'wander') return { kind: 'wander' };
       if (j?.action === 'walk_to' && ids.includes(j.target)) {
         const o = places.find((x) => x.id === j.target);
-        if (o.dist <= 2) return {};   // already there
         const p = this.world.getObj(j.target);
         const label = j.target === 'lake' ? 'the lake' : p?.kind === 'person' ? 'the ' + p.gender : this.plain(j.target).replace(/^a /, 'the ');
+        if (o.dist <= 3) return { kind: 'already', label };   // they are already there - tell them so
         return { kind: 'walk', target: j.target, label };
+      }
+      // Safety net: small models often answer "stay" even when the wish plainly says to walk
+      // somewhere visible. If the plain-language reading finds a movement, use that.
+      const kw = this.interpret(intention);
+      if (kw.kind) {
+        this.logTranscript('read_wish_fallback', payload, `model said "${j?.action || 'nothing'}"; keyword reading used: ${JSON.stringify(kw)}`, t0);
+        return kw;
       }
       return {};
     } catch (e) {
@@ -565,14 +631,16 @@ export class Brain {
       if (m) found.push({ kind, at: m.index });
     }
     found.sort((a, b) => (a.kind === 'person') - (b.kind === 'person') || a.at - b.at);
+    let alreadyAt = null;
     for (const f of found) {
       const plan = this.planFor(f.kind);
       if (!plan) continue;
       const tgt = plan.target === 'lake' ? this.world.terrain.shorePointToward(this.character.position) : this.world.getObj(plan.target)?.position;
-      if (tgt && flatDist(this.character.position, tgt) <= 3) continue;   // already there -> next place
+      if (tgt && flatDist(this.character.position, tgt) <= 3) { alreadyAt = alreadyAt || plan.label; continue; }   // already there -> next place
       return plan;
     }
     if (sitting) return { kind: 'sit' };
+    if (alreadyAt) return { kind: 'already', label: alreadyAt };
     return moving && !found.length ? { kind: 'wander' } : {};
   }
 
@@ -615,7 +683,7 @@ export class Brain {
 ${this.personality}
 Nobody gives you a goal. You are completely free: you decide what matters to you, what you want to do, explore, build, think about or say. Follow your own curiosity, moods and wishes.
 ${this.bodyLine()}
-Sometimes a voice (the Player) talks to you. You can answer them with say(), or with the "say" field, or ignore them; it is your choice.
+Sometimes a voice talks to you. You can answer them with say(), or with the "say" field, or ignore them; it is your choice.
 Each turn choose exactly ONE action:
 - walk_to(target): walk to an id from NEARBY OBJECTS (e.g. tree_3, bush_1, rock_2, lake, shelter, campfire, pier, lookout, bench, boat, flowers_1, or a person).
 - gather(target): harvest a tree (wood), rock (stone) or berry bush (berries). Only works when the object is IN REACH, so walk_to it first.
@@ -637,7 +705,7 @@ Reply ONLY with JSON: {"thought": "...", "action": "...", "target": "...", "say"
     let t = `${this.intro()}
 ${this.bodyLine()}
 No one has given you a goal or told you what to do.
-A voice (the Player) may sometimes speak to you.
+A voice may sometimes speak to you.
 Each turn, choose exactly ONE action:
 - walk_to(target): walk to an id from NEARBY OBJECTS.
 - gather(target): take wood from a tree, stone from a rock or berries from a bush. Only works when the object is IN REACH.
@@ -658,7 +726,7 @@ Reply ONLY with JSON: {"thought": "...", "action": "...", "target": "...", "say"
 ${this.bodyLine()}
 ${this.abilities()}
 No one has given you a goal or told you what to do. There is no list of commands: describe in your own words what you want to do next, if anything.
-A voice (the Player) may sometimes speak to you.
+A voice may sometimes speak to you.
 Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
 - thought: your thoughts.
 - intention: what you want to do next, in your own words.
@@ -673,7 +741,7 @@ ${this.personality}
 ${Session.identity === 'ai' ? 'Through the body you can see, hear and speak.' : 'You can see, hear and speak.'}
 Nobody gives you a goal, and there is no list of commands. Simply describe, in your own words, what you want to do next with your body. Anything at all.
 Your body will physically do simple things you clearly want, like walking somewhere you can see, wandering around or sitting down. Anything else stays a wish in your mind.
-Sometimes a voice (the Player) talks to you. You can answer or ignore it.
+Sometimes a voice talks to you. You can answer or ignore it.
 Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
 - thought: your honest inner thoughts (1-3 sentences).
 - intention: what you want to do next with your body, in your own words.
@@ -682,6 +750,8 @@ Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
 
   commonTail(lines) {
     const recent = this.events.slice(-12);
+    const rb = this.retrievedBlock();
+    if (rb) lines.push(rb);
     if (this.impressionsBlock()) lines.push(this.impressionsBlock());
     if (!Session.research && this.reflections.length) {
       lines.push('YOUR REFLECTIONS:');
@@ -695,7 +765,7 @@ Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
     if (rut) lines.push(rut);
     if (this.playerMsgs.length) {   // last, so small models don't overlook it
       lines.push('THE PLAYER (a voice from nowhere) SAID:\n' + this.playerMsgs.map((m) => `- "${m}"`).join('\n') +
-        (Session.research ? '' : '\nThe Player is waiting for your answer. Reply to the Player directly in the "say" field this turn.'));
+        (Session.research ? '' : '\nThe Voice is waiting for your answer. Reply to the Voice directly in the "say" field this turn.'));
       this.playerMsgs = [];
     }
     return recent;
@@ -839,6 +909,82 @@ Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
     return Session.research ? this.intro() : `${this.intro()}\n${this.personality}`;
   }
 
+  // ---------------------------------------------------------------- memory stream
+  // Embeddings for relevance: OpenAI text-embedding-3-small, or an Ollama embedding model
+  // (e.g. nomic-embed-text) if one is installed. Otherwise relevance = word overlap.
+  async embed(texts) {
+    if (!texts.length) return null;
+    if (Provider.name === 'openai') {
+      const j = await this.http('https://api.openai.com/v1/embeddings', { model: 'text-embedding-3-small', input: texts }, 20,
+        { Authorization: 'Bearer ' + Provider.key });
+      return (j?.data || []).map((d) => d.embedding);
+    }
+    if (!this.embedModel) return null;
+    const j = await this.http(Provider.ollama('/api/embed'), { model: this.embedModel, input: texts }, 30);
+    return j?.embeddings || null;
+  }
+
+  async embedPending() {
+    if (Provider.name !== 'openai' && !this.embedModel) return;
+    const pending = this.mem.unembedded(32);
+    try {
+      const vecs = await this.embed(pending.map((m) => m.text));
+      vecs?.forEach((v, i) => { pending[i].emb = v; });
+    } catch { /* relevance falls back to word overlap */ }
+  }
+
+  // Choose the older memories that come to mind now (recency + importance + relevance).
+  async prepareRetrieval(questionOverride = '') {
+    const c = this.character;
+    const query = questionOverride || [
+      ...this.world.nearby(c.position, 15, 5, c.id).map((o) => this.plain(o.id)),
+      ...this.pendingChat, ...this.playerMsgs, ...this.events.slice(-3),
+    ].join('. ');
+    let qEmb = null;
+    try {
+      await this.embedPending();
+      qEmb = (await this.embed([query]))?.[0] || null;
+    } catch { qEmb = null; }
+    this.retrieved = this.mem.retrieve({ query, queryEmb: qEmb, now: c.survivalTime, k: 8, skipRecent: 12 });
+  }
+
+  retrievedBlock() {
+    if (!this.retrieved.length) return '';
+    const now = this.character.survivalTime;
+    return 'OLDER MEMORIES THAT COME TO MIND:' + this.retrieved.map(({ m }) => {
+      const mins = Math.round((now - m.t) / 60);
+      return `\n- (${mins < 1 ? 'just before' : mins + ' min ago'}${m.kind === 'insight' ? ', an insight you had' : ''}) ${m.text}`;
+    }).join('');
+  }
+
+  scoreBody(batch) {
+    const text = 'Rate how important each memory is to you, from 1 (purely mundane, e.g. walking or looking around) to 10 (extremely significant, e.g. a death or a life-changing event).\n\n'
+      + batch.map((m, i) => `${i + 1}. ${m.text}`).join('\n')
+      + '\n\nReply as JSON {"scores": [numbers in the same order]}.';
+    return { format: { type: 'object', properties: { scores: { type: 'array', items: { type: 'integer' } } }, required: ['scores'] },
+      options: this.opts(80, 0), messages: [{ role: 'system', content: this.persona() }, { role: 'user', content: text }] };
+  }
+
+  // Reflection (paper: "what high-level insights can you infer?") over the most recent ~30 memories.
+  insightBody() {
+    const recent = this.mem.items.slice(-30);
+    const text = 'Statements about your experience:\n' + recent.map((m, i) => `${i + 1}. ${m.text}`).join('\n')
+      + '\n\nWhat 1 to 3 high-level insights can you infer from these statements? Use only what they support. Write each in first person. Reply as JSON {"insights": ["...", "..."]}.';
+    return { format: { type: 'object', properties: { insights: { type: 'array', items: { type: 'string' } } }, required: ['insights'] },
+      options: this.opts(220, 0.3), messages: [{ role: 'system', content: this.persona() }, { role: 'user', content: text }] };
+  }
+
+  interviewBody(q) {
+    let text = this.summary ? `Your summary of what happened: ${this.summary}\n\n` : '';
+    const rb = this.retrievedBlock();
+    if (rb) text += rb + '\n\n';
+    text += 'Recent events:\n' + this.events.slice(-12).join('\n');
+    if (this.impressionsBlock()) text += '\n\n' + this.impressionsBlock();
+    text += `\n\nAn interviewer asks you: "${q}"\nAnswer honestly in the first person, in 1-4 sentences, based only on what you remember. Reply as JSON {"answer": "..."}.`;
+    return { format: one('answer', 900), options: this.opts(220, Session.temperature), messages: [
+      { role: 'system', content: this.persona() }, { role: 'user', content: text }] };
+  }
+
   // Long-term memory: rewrite a running summary of everything so far.
   summaryBody() {
     let text = `Your previous summary: ${this.summary || '(none yet)'}\n\nWhat happened since:\n` + this.events.slice(-24).join('\n');
@@ -857,7 +1003,7 @@ Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
 
   replyBody(msg) {
     let text = 'What has happened recently:\n' + this.events.slice(-8).join('\n');
-    text += `\n\nA voice from nowhere (the Player) just said to you: "${msg}"\nAnswer the Player out loud, in character, in 1-2 sentences. Reply as JSON {"reply": "..."}.`;
+    text += `\n\nA voice from nowhere just said to you: "${msg}"\nAnswer the Voice out loud, in character, in 1-2 sentences. Reply as JSON {"reply": "..."}.`;
     return { format: one('reply', 240), options: this.opts(120, 0.8), messages: [
       { role: 'system', content: this.persona() }, { role: 'user', content: text }] };
   }
@@ -880,6 +1026,7 @@ Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
   toJSON() {
     return {
       events: this.events, reflections: this.reflections, recent: this.recent, decisionCount: this.decisionCount,
+      memories: this.mem.toJSON(),
       impressions: this.impressions, knownNames: this.knownNames, introducedTo: this.introducedTo, deaths: this.deaths, summary: this.summary,
       name: this.charName, personality: this.personality, model: this.model, openaiModel: this.openaiModel, timeout: this.timeout,
     };
@@ -889,6 +1036,7 @@ Reply ONLY with JSON: {"thought": "...", "intention": "...", "say": "..."}
       if (d[k] !== undefined) this[k] = d[k];
     }
     if (d.name) this.charName = d.name;
+    if (d.memories) this.mem.load(d.memories);
   }
 }
 
@@ -976,9 +1124,8 @@ export function instructionsPreview({ mode, needs, person, research = Session.re
     mode === 'actions' ? 'Nearby objects with ids, distances and directions (ahead, to your left, behind you...)' : 'What they see, in plain words with distances and directions',
     'Other people: looks, what they are doing, whether they face you; a name only after it was said out loud',
     'What they just heard (from you or the other person)',
-    'Their last 12 events',
+    'Their last 12 events, plus up to 8 older memories chosen by recency, importance and relevance',
     'Their private notes about the other person',
-    research ? null : 'Their last 3 reflections',
     'Any death they witnessed - kept forever',
     research ? null : 'A gentle "you notice..." if they keep repeating themselves',
     research ? 'Your messages, placed last (no instruction to answer)' : 'Your messages, placed last, with a request to answer you',
@@ -986,7 +1133,7 @@ export function instructionsPreview({ mode, needs, person, research = Session.re
   const memory = [
     'Every 12 decisions: they rewrite a summary of everything so far (long-term memory)',
     'Every 8 decisions after contact: they rewrite a private note about the other person',
-    research ? null : 'Every 10 decisions: a one-sentence reflection',
+    'Every memory is stored and rated for importance (1-10); when enough important things happen, they reflect and draw 1-3 insights, stored as memories',
     research ? null : 'When you speak: a separate request whose only job is to answer you',
     mode === 'free' ? 'After each wish: a separate neutral request decides what the body can physically do (stay, walk to a visible place, wander, sit)' : null,
   ].filter(Boolean);

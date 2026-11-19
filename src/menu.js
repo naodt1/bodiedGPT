@@ -3,11 +3,30 @@
 import { Session } from './session.js';
 import { Provider, instructionsPreview, listModels } from './brain.js';
 import { PEOPLE } from './people.js';
-import { icon } from './icons.js';
+import { icon, iconFilled } from './icons.js';
 import { listSaves, loadSave, applySession } from './save.js';
 
 const TIMES = [['Morning', '08:00'], ['Midday', '12:30'], ['Evening', '18:30'], ['Night', '22:30']];
 const RATES = [[1, 'Real time'], [60, '1 min / s'], [600, '10 min / s'], [3600, '1 hour / s']];
+
+// ---------------------------------------------------------------- template scenarios
+// One click fills in the whole setup and opens Review. Nothing is hidden: the instructions
+// each subject gets are shown (and editable) on the Review step.
+const today = () => new Date().toISOString().slice(0, 10);
+const SCENARIOS = [
+  {
+    id: 'alone', title: 'Alone', icon: 'users',
+    desc: 'One person on the island. Free will, no needs. The baseline.',
+    apply: (st) => Object.assign(st, { people: 1, needs: false, mode: 'free', death: false, research: true, identity: 'unspecified',
+      time: 0, clock: '08:00', relation: '', experiment: `Alone ${today()}` }),
+  },
+  {
+    id: 'strangers', title: 'Two strangers', icon: 'users',
+    desc: 'Two people who are never told the other exists. Do they meet? What happens?',
+    apply: (st) => Object.assign(st, { people: 2, needs: false, mode: 'free', death: false, research: true, identity: 'unspecified',
+      time: 0, clock: '08:00', relation: '', experiment: `Two strangers ${today()}` }),
+  },
+];
 
 const STEPS = [
   { id: 'start', title: 'Welcome', sub: 'Start a new experiment or continue one.' },
@@ -29,6 +48,7 @@ export function showMenu(root, onStart) {
     needs: Session.needs, mode: Session.mode, death: Session.death,
     research: Session.research, identity: Session.identity === 'person' ? 'person' : 'unspecified', temperature: Session.temperature, seed: Session.seed,
     customs: ['', ''],   // edited instructions per subject ('' = use the default)
+    relation: Session.relation || '', scenario: '',
     time: closestTime(), date: Session.dateString(), clock: TIMES[closestTime()][1], rate: Session.clockRate,
     provider: Provider.name, model: '', models: null, modelStatus: '', modelOk: false,
     ollamaUrl: Provider.ollamaUrl, remember: Provider.remember,
@@ -42,12 +62,11 @@ export function showMenu(root, onStart) {
       <h1 class="wordmark"><i>Bodied</i>GPT</h1>
       <p class="tagline">What does an AI do if it's given a body and freedom?</p>
       <p class="blurb">A language model gets a body on a small island. Nobody tells it what to do. You watch what it thinks, wants and does, and you can read exactly what it was told.</p>
-      <ul class="facts">
-        <li>${badge('users', '#0a84ff')}<span><b>Alone or with a stranger</b><small>A second AI it is never told about.</small></span></li>
-        <li>${badge('sparkles', '#bf5af2')}<span><b>Action list or free will</b><small>Choose from a list, or say anything.</small></span></li>
-        <li>${badge('eye', '#30d158')}<span><b>Fully transparent</b><small>Every prompt and reply can be inspected.</small></span></li>
-        <li>${badge('history', '#ff9f0a')}<span><b>Saved as you go</b><small>Continue any run later.</small></span></li>
-      </ul>
+      <nav class="about-links">
+        <a href="/how-it-works.html">${iconFilled('doc', 18)}<span><b>How it works</b><small>Prompts, perception, memory, free will</small></span>${icon('chevron', 14)}</a>
+        <a href="/results.html">${iconFilled('chart', 18)}<span><b>Results</b><small>What the subjects actually did</small></span>${icon('chevron', 14)}</a>
+        <a href="/references.html">${iconFilled('book', 18)}<span><b>References</b><small>The research it builds on</small></span>${icon('chevron', 14)}</a>
+      </nav>
       <p class="fine">Runs in your browser · no account · your API key stays with you</p>
     </section>
     <section class="wizard">
@@ -60,6 +79,10 @@ export function showMenu(root, onStart) {
         <button class="next" id="w-next">Next</button>
       </div>
     </section>`;
+  // Vignette: darkens the edges of the live island behind the launch screen.
+  const vignette = document.createElement('div');
+  vignette.className = 'vignette';
+  root.appendChild(vignette);
   root.appendChild(wrap);
   const $ = (s) => wrap.querySelector(s);
 
@@ -70,7 +93,11 @@ export function showMenu(root, onStart) {
     $('#w-title').textContent = s.title;
     $('#w-sub').textContent = s.sub;
     $('#w-err').textContent = '';
-    $('#w-dots').innerHTML = STEPS.slice(1).map((_, i) => `<span class="${i + 1 === st.step ? 'on' : i + 1 < st.step ? 'done' : ''}"></span>`).join('');
+    // Progress: square-ended segments like a measuring scale + a monospace "02 / 05" count.
+    const total = STEPS.length - 1, pad = (n) => String(n).padStart(2, '0');
+    $('#w-dots').innerHTML = st.step === 0 ? '' :
+      `<span class="seg-bar">${STEPS.slice(1).map((_, i) => `<i class="${i + 1 === st.step ? 'on' : i + 1 < st.step ? 'done' : ''}"></i>`).join('')}</span>` +
+      `<span class="seg-count">${pad(st.step)} / ${pad(total)}</span>`;
     $('#w-back').style.visibility = st.step === 0 ? 'hidden' : 'visible';
     $('#w-next').classList.toggle('hidden', st.step === 0);
     $('#w-next').innerHTML = st.step === STEPS.length - 1 ? `${icon('play', 13)} Start experiment` : 'Next';
@@ -87,6 +114,7 @@ export function showMenu(root, onStart) {
     const k = b.parentElement.dataset.k, v = b.dataset.v;
     st[k] = ['people', 'time', 'rate', 'temperature'].includes(k) ? +v : k === 'needs' || k === 'research' ? v === 'true' : v;
     if (k === 'time') st.clock = TIMES[+v][1];
+    if (k === 'people') { st.relation = ''; st.scenario = ''; }
     if (['mode', 'needs', 'identity', 'research', 'people'].includes(k) && st.customs.some(Boolean)) {
       st.customs = ['', ''];
       st.customsCleared = true;
@@ -97,7 +125,12 @@ export function showMenu(root, onStart) {
 
   const VIEWS = {
     start: () => `
-      <button class="big-choice" id="w-new">${badge('play', '#0a84ff')}<span><b>New experiment</b><small>Set up subjects and conditions</small></span>${icon('chevron', 14)}</button>
+      <div class="group-title">Ready-made scenarios</div>
+      <div class="scenarios">${SCENARIOS.map((sc) => `
+        <button class="scenario" data-scenario="${sc.id}">${badge(sc.icon, '#636366')}
+          <span><b>${sc.title}</b><small>${sc.desc}</small></span>${icon('chevron', 14)}</button>`).join('')}</div>
+      <div class="group-title">Or</div>
+      <button class="big-choice" id="w-new">${badge('play', '#0a84ff')}<span><b>Custom experiment</b><small>Set up subjects and conditions yourself</small></span>${icon('chevron', 14)}</button>
       ${saves.length ? `<div class="group-title">Continue a previous run</div><div class="group">${saves.slice(0, 6).map((s) => `
         <div class="run-row"><button class="cell run-item" data-key="${s.key}" title="Continue this run">${badge('history', '#48484a')}
           <span class="run-text"><span>${esc(s.name)}</span><small>${esc(s.meta)}</small></span><span class="chev">${icon('chevron', 14)}</span></button>
@@ -129,7 +162,7 @@ export function showMenu(root, onStart) {
           <div class="note">${st.needs ? 'They feel hunger and tiredness, described in words.' : 'No stats at all. Nothing they have to do.'}</div>
         </div>
         <div class="cell">
-          <div class="cell-top">${badge('sparkles', '#bf5af2')}<span class="cell-label">Behaviour</span></div>
+          <div class="cell-top">${badge('compass', '#bf5af2')}<span class="cell-label">Behaviour</span></div>
           ${seg('mode', [['actions', 'Action list'], ['free', 'Free will']])}
           <div class="note">${st.mode === 'actions' ? 'Picks one action at a time: walk, gather, eat, drink, rest, talk, wait.' : 'No list. It says what it wants; the body does what a body can (walk, wander, sit).'}</div>
         </div>
@@ -150,7 +183,7 @@ export function showMenu(root, onStart) {
           <div class="note">${st.research ? 'Told only facts: it is an AI with a body. No personality, no hints, no instruction to answer you.' : 'Personalities, gentle hints when it repeats itself, guaranteed replies to you. Better for entertaining videos.'}</div>
         </div>
         <div class="cell">
-          <div class="cell-top">${badge('sparkles', '#636366')}<span class="cell-label">Temperature</span></div>
+          <div class="cell-top">${badge('thermometer', '#636366')}<span class="cell-label">Temperature</span></div>
           ${seg('temperature', [[0, '0'], [0.4, '0.4'], [0.7, '0.7'], [1, '1.0']])}
           <div class="note">Lower = more predictable and repeatable. 0.7 is a natural default.</div>
         </div>
@@ -196,7 +229,7 @@ export function showMenu(root, onStart) {
         <div class="cell"><div class="cell-top">${badge('cpu', '#30d158')}<span class="cell-label small">Ollama address</span>
           <input type="text" class="bare right-text" id="w-ollama" value="${esc(st.ollamaUrl)}" spellcheck="false"></div></div>`}
         <div class="cell">
-          <div class="cell-top">${badge('sparkles', '#5e5ce6')}<span class="cell-label">Model</span>
+          <div class="cell-top">${badge('layers', '#5e5ce6')}<span class="cell-label">Model</span>
             <select class="bare right" id="w-model">${(st.models || []).map((m) => `<option ${m === st.model ? 'selected' : ''}>${esc(m)}</option>`).join('') || `<option value="">${st.modelStatus ? 'none' : 'checking...'}</option>`}</select></div>
           <div class="note ${st.modelStatus ? (st.modelOk ? 'ok' : 'bad') : ''}" id="w-mstatus">${esc(st.modelStatus)}</div>
         </div>
@@ -208,9 +241,10 @@ export function showMenu(root, onStart) {
       return `
       <div class="group">
         ${row('tag', '#64d2ff', 'Experiment', st.experiment)}
-        ${row('users', '#0a84ff', 'Subjects', names)}
+        ${st.scenario ? row('doc', '#636366', 'Scenario', SCENARIOS.find((x) => x.id === st.scenario).title) : ''}
+        ${row('users', '#0a84ff', 'Subjects', names + (st.relation === 'married' ? ' · married' : ''))}
         ${row('heart', '#ff375f', 'Body needs', st.needs ? (st.death ? 'Hunger & tiredness · can die' : 'Hunger & tiredness') : 'None')}
-        ${row('sparkles', '#bf5af2', 'Behaviour', st.mode === 'actions' ? 'Action list' : 'Free will')}
+        ${row('compass', '#bf5af2', 'Behaviour', st.mode === 'actions' ? 'Action list' : 'Free will')}
         ${row('users', '#636366', 'Identity', st.identity === 'person' ? 'Person' : 'Unspecified')}
         ${row('flask', '#636366', 'Method', `${st.research ? 'Research' : 'Characterful'} · temp ${st.temperature} · seed ${st.seed}`)}
         ${row('sun', '#ff9f0a', 'Starts', `${st.date} ${st.clock} · ${RATES.find(([v]) => v === st.rate)?.[1] || ''}`)}
@@ -233,7 +267,24 @@ export function showMenu(root, onStart) {
 
   const BIND = {
     start: () => {
-      $('#w-new').addEventListener('click', () => { st.step = 1; render(); });
+      $('#w-new').addEventListener('click', () => { st.relation = ''; st.scenario = ''; st.step = 1; render(); });
+      wrap.querySelectorAll('[data-scenario]').forEach((b) => b.addEventListener('click', () => {
+        const sc = SCENARIOS.find((x) => x.id === b.dataset.scenario);
+        sc.apply(st);
+        st.scenario = sc.id;
+        st.names = PEOPLE.map((p, i) => st.names[i] || p.name);
+        // Default instructions for these conditions, plus the scenario's facts.
+        st.customs = PEOPLE.map((p, i) => {
+          if (!sc.extra || i >= st.people) return '';
+          const def = instructionsPreview({ mode: st.mode, needs: st.needs, person: { ...p, name: st.names[i] }, research: st.research, identity: st.identity }).system;
+          const lines = def.split('\n');
+          lines.splice(2, 0, sc.extra(i, st.names));   // right after "who you are" + appearance
+          return lines.join('\n');
+        });
+        st.step = STEPS.length - 1;   // straight to Review
+        if (st.models === null) loadModels();   // make sure a model is picked
+        render();
+      }));
       wrap.querySelectorAll('[data-repeat]').forEach((b) => b.addEventListener('click', () => {
         const d = saves.find((x) => x.key === b.dataset.repeat)?.data;
         if (!d) return;
@@ -317,7 +368,7 @@ export function showMenu(root, onStart) {
     st.model = r.models.includes(saved) ? saved : (r.suggested || '');
     st.modelOk = r.ok;
     st.modelStatus = r.ok ? `● Connected · ${r.models.length} model${r.models.length === 1 ? '' : 's'}${prov === 'openai' ? ' · cheapest selected' : ''}` : '● ' + r.error;
-    if (STEPS[st.step].id === 'ai') render();
+    if (['ai', 'review'].includes(STEPS[st.step].id)) render();
   }
 
   // ---------------------------------------------------------------- navigation
@@ -358,12 +409,13 @@ export function showMenu(root, onStart) {
       people: st.people, needs: st.needs, mode: st.mode, death: st.needs && st.death,
       research: st.research, identity: st.identity, temperature: st.temperature, seed: st.seed,
       customPrompts: st.customs.slice(0, st.people),
+      relation: st.people === 2 ? st.relation : '', scenario: st.scenario,
       clockRate: st.rate, saveName: st.experiment.trim(), pendingLoad: null,
     });
     finish();
   }
 
-  function finish() { wrap.remove(); onStart(); }
+  function finish() { wrap.remove(); vignette.remove(); onStart(); }
 
   render();
 

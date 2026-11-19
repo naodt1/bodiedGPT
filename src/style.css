@@ -401,3 +401,94 @@ body.og #labels .bubble { font-size: 22px; max-width: 380px; padding: 12px 18px;
 .edited { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: rgba(255,255,255,.14); color: #fff; margin-left: 6px; }
 .told-cta { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: rgba(235,235,245,.55); }
 .told-block[open] .told-cta svg { transform: rotate(90deg); }
+
+/* ready-made scenarios on the Welcome step */
+.scenarios { display: flex; flex-direction: column; gap: 6px; }
+.scenario {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 12px 14px; cursor: pointer;
+  background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.08); border-radius: 9px; color: var(--text); font: inherit;
+}
+.scenario:hover { background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.18); }
+.scenario > span:not(.badge) { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.scenario b { font-size: 15px; font-weight: 600; }
+.scenario small { font-size: 12.5px; color: rgba(235,235,245,.55); line-height: 1.35; }
+.scenario .ic { color: rgba(235,235,245,.4); }
+
+/* launch screen vignette: darker towards the edges */
+.vignette {
+  position: absolute; inset: 0; z-index: 9; pointer-events: none;
+  background: radial-gradient(ellipse 85% 80% at 50% 50%, rgba(0,0,0,0) 35%, rgba(0,0,0,.45) 75%, rgba(0,0,0,.78) 100%);
+}
+
+/* inspector interview */
+.iv-form { display: flex; gap: 6px; margin: 8px 0 12px; }
+.iv-form input { flex: 1; padding: 8px 10px; font-size: 13.5px; }
+.iv-item { background: rgba(255,255,255,.05); border-radius: 8px; padding: 9px 10px; margin-bottom: 8px; }
+.iv-q { font-weight: 600; font-size: 13.5px; margin-bottom: 4px; }
+.iv-a { font-size: 13.5px; color: #dfe4ec; line-height: 1.45; }
+.iv-t { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+
+/* about card: links to the article pages */
+.about-links { display: flex; flex-direction: column; gap: 8px; }
+.about-links a {
+  display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 9px; text-decoration: none; color: var(--text);
+  background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.08);
+}
+.about-links a:hover { background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.18); }
+.about-links a > svg:first-child { color: #ececf1; flex: none; }
+.about-links span { flex: 1; display: flex; flex-direction: column; }
+.about-links b { font-size: 14.5px; font-weight: 600; }
+.about-links small { font-size: 12.5px; color: rgba(235,235,245,.55); }
+.about-links a > svg:last-child { color: rgba(235,235,245,.35); }
+/* about card: hugs its content (no stretched empty space); buttons follow the description */
+.about { align-self: flex-start; }
+.about-links { margin-top: 4px; }
+.about .fine { margin-top: 18px; }
+
+/* step progress: thin square segments + monospace count (replaces the round iOS dots) */
+.dots { display: flex; align-items: center; gap: 10px; }
+.dots .seg-bar, .dots .seg-count { width: auto; height: auto; border-radius: 0; background: none; transition: none; }
+.dots .seg-bar { display: flex; align-items: center; gap: 3px; }
+.seg-bar i { display: block; width: 16px; height: 2px; background: rgba(235,235,245,.16); transition: background .2s, height .2s; }
+.seg-bar i.done { background: rgba(235,235,245,.55); }
+.seg-bar i.on { background: #ececf1; height: 4px; }
+.seg-count { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; letter-spacing: .06em; color: rgba(235,235,245,.5); }
+
+/* Thought log docked to the right edge, solid and dark */
+#log.panel { top: 0; right: 0; bottom: 0; width: 400px; border-radius: 0; border: 0; border-left: 1px solid rgba(255,255,255,.08);
+  background: #0c0c0e; backdrop-filter: none; -webkit-backdrop-filter: none; padding: 14px 16px; }
+#bars { right: 416px; }
+@media (max-width: 900px) { #log.panel { width: 300px; } #bars { right: 316px; } }
+#topbar, #chat { left: calc((100% - 400px) / 2); max-width: calc(100% - 432px); }
+#topbar { overflow: hidden; }
+@media (max-width: 900px) { #topbar, #chat { left: calc((100% - 300px) / 2); max-width: calc(100% - 332px); } }
+
+/* Top bar: info on the left, a clear button hierarchy on the right */
+#topbar.panel { background: #0c0c0e; backdrop-filter: none; border: 1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 6px 6px 6px 14px; gap: 8px; }
+#tb-text { display: flex; align-items: center; gap: 10px; font-size: 13px; color: rgba(235,235,245,.6); }
+.tb-date { color: #ececf1; font-weight: 500; }
+.tb-who { color: #ececf1; font-weight: 600; }
+.tb-chip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; padding: 2px 7px; border-radius: 5px; background: rgba(255,255,255,.07); color: rgba(235,235,245,.75); }
+.tb-since { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; min-width: 42px; }
+.tb-status { color: #ff8a8a; font-size: 12px; }
+.tb-div { width: 1px; height: 20px; background: rgba(255,255,255,.1); margin: 0 2px; }
+#topbar button { height: 30px; padding: 0 11px; border-radius: 7px; font-size: 13px; font-weight: 500; transition: background .15s, border-color .15s, color .15s; }
+#topbar .b-icon { width: 30px; padding: 0; justify-content: center; }
+#topbar .b-primary { background: #ececf1; color: #0b0b0d; border: 1px solid #ececf1; }
+#topbar .b-primary:hover { background: #fff; }
+#topbar .b-primary.active { background: transparent; color: #ececf1; border-color: rgba(255,255,255,.5); }
+#topbar .b-outline { background: transparent; border: 1px solid rgba(255,255,255,.18); color: #ececf1; }
+#topbar .b-outline:hover { border-color: rgba(255,255,255,.4); background: rgba(255,255,255,.04); }
+#topbar .b-outline.active { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.45); color: #fff; }
+#topbar .b-ghost { background: transparent; border: 1px solid transparent; color: rgba(235,235,245,.65); }
+#topbar .b-ghost:hover { background: rgba(255,255,255,.08); color: #fff; }
+#topbar .seg { display: flex; padding: 2px; border-radius: 8px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); }
+#topbar .seg button { height: 26px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; color: rgba(235,235,245,.6); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+#topbar .seg button:hover { color: #fff; background: transparent; }
+#topbar .seg button.active { background: rgba(255,255,255,.14); color: #fff; border: 0; }
+@media (max-width: 1250px) { .tb-date, .tb-since { display: none; } }
+/* Same frosted translucency as the menu cards */
+#log.panel, #topbar.panel { background: rgba(20, 20, 22, 0.86); backdrop-filter: saturate(180%) blur(30px); -webkit-backdrop-filter: saturate(180%) blur(30px); }
+.tb-run { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; letter-spacing: .04em; color: #ececf1; }
+.tb-meta { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: rgba(235,235,245,.5); }
+@media (max-width: 1750px) { .tb-date { display: none; } }
